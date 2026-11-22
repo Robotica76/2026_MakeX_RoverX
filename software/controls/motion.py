@@ -6,6 +6,7 @@
 import hal
 import config as cfg
 import geometry as geo
+import colors
 
 
 def sign(v):
@@ -41,8 +42,17 @@ def turn(deg, timeout=None):
     return False
 
 
+def wrap180(deg):
+    while deg > 180:
+        deg -= 360
+    while deg < -180:
+        deg += 360
+    return deg
+
+
 def turn_to(heading, timeout=None):
-    return turn(heading - hal.heading(), timeout)
+    """Gira hasta un rumbo absoluto por el camino más corto (antes podía dar la vuelta larga)."""
+    return turn(wrap180(heading - hal.heading()), timeout)
 
 
 def _hold(speed, target):
@@ -122,8 +132,50 @@ def climb(speed=None, timeout=None, extra_cm=None):
     return False
 
 
-def stairs():
-    return climb(cfg.P["v_stairs"], cfg.STAIRS_TIMEOUT_S)
+def stairs(extra_cm=None):
+    return climb(cfg.P["v_stairs"], cfg.STAIRS_TIMEOUT_S, extra_cm)
+
+
+def sees_color(name):
+    """Alguna de las cuatro sondas ve ese color. La línea pasa por encima de las zonas, así que
+    las centrales leen negro; las exteriores van a los lados (lo mostró el simulador)."""
+    for pr in cfg.PROBES:
+        if colors.read(pr) == name:
+            return True
+    return False
+
+
+def climb_crest(after_cm, speed=None, timeout=None, target=None, color=None):
+    """Sube hasta pasar la cima (el pitch ya subió y empieza a bajar: el frente está arriba) y
+    avanza after_cm medidos con encoder. Sirve cuando arriba no hay espacio para esperar a quedar
+    plano (nivel 4: la torre está a ~20 cm de la escalera; lo mostró el simulador)."""
+    if speed is None:
+        speed = cfg.P["v_stairs"]
+    if timeout is None:
+        timeout = cfg.STAIRS_TIMEOUT_S
+    if target is None:
+        target = hal.heading()
+    t0 = hal.now()
+    top = 0                         # pitch máximo visto
+    while hal.now() - t0 < timeout:
+        if hal.abort_requested():
+            hal.stop()
+            return False
+        p = hal.pitch()
+        if p > top:
+            top = p
+        # cima: ya subió y el pitch bajó CREST_DROP grados desde su máximo (el frente está arriba;
+        # esperar a quedar plano no sirve porque la cola sigue en la escalera)
+        if color is not None:
+            # referencia exacta: las sondas centrales ven el color de la zona de arriba
+            if top >= cfg.P["pitch_ramp"] and sees_color(color):
+                return straight(after_cm, cfg.P["v_ramp"], target=target)
+        elif top >= cfg.P["pitch_ramp"] and p <= top - cfg.CREST_DROP:
+            return straight(after_cm, cfg.P["v_ramp"], target=target)   # aún en pendiente: con fuerza
+        _hold(speed, target)
+        hal.wait(cfg.LOOP_DT)
+    hal.stop()
+    return False
 
 
 def spin_to_line(direction=1, timeout=3.0, leave=True):
@@ -165,9 +217,15 @@ def seek_line(speed=None, max_cm=60, target=None):
     hal.reset_odometer()
     t = 1.0 + max_cm / 8.0
 
+    found = [False]
+
     def cond():
-        return on_line() or abs(hal.odometer_cm()) >= max_cm
-    return straight_until(cond, speed, t, target) and on_line()
+        if on_line():
+            found[0] = True         # la lectura que detuvo el avance (releerla con ruido fallaba)
+            return True
+        return abs(hal.odometer_cm()) >= max_cm
+    straight_until(cond, speed, t, target)
+    return found[0]
 
 
 def detour(side=None):

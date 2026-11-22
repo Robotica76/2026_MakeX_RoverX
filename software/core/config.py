@@ -59,11 +59,14 @@ P = {
     "h_pedestal": 12.5,      # sobre el pedestal (10 cm + medio cubo)
     "h_carry": 17.5,         # transporte: base del cubo >= 5 cm sobre el pedestal (10 + 5 + 2.5)
     "h_bar": 12.0,           # barra de pelotas (10 cm)
+    "h_prism": 4.0,          # garra baja y abierta para llevar el prisma como en una cuna (misión 7)
 
     # --- garra (CALIBRAR)
     "claw_open": 90,         # TODO(calibrar)
     "claw_cube": 35,         # TODO(calibrar)
     "claw_ball": 45,         # TODO(calibrar)
+    "claw_open_w": 9.0,      # TODO(medir) separación interior de los dedos con la garra abierta
+                             # (el prisma mide ~7 cm de base en el plano; pregunta abierta)
 
     # --- línea
     "line_mode": 1,          # 1 = analógico calibrado (recomendado), 0 = get_offset_track
@@ -101,7 +104,7 @@ P = {
     "ball_ped_dist": 23.6,   # nivel 3: del centro de la línea (en la marca roja) al centro del pedestal
     "tower_from_edge": 7.5,  # nivel 4: del borde de salida de la zona verde a la cara de la torre
     "tower_size": 10.0,
-    "side_margin": 4.0,      # holgura lateral al rodear
+    "side_margin": 2.0,      # holgura al rodear (con 4 cm el robot volvía sobre una tarjeta)
     "bar_side": 1,           # -1 = barra de pelotas a la izquierda de la línea, 1 = derecha
     "bar_reach": 8.2,        # avance desde la línea para dejar la garra sobre el agujero
 
@@ -125,7 +128,7 @@ TUNE = [
     ("Brazo", "arm_len", 0.5, 2, 30), ("Brazo", "arm_grip_dx", 0.5, -10, 20),
     ("Brazo", "arm_grip_dz", 0.5, -15, 15),
     ("Brazo", "h_pedestal", 0.5, 0, 30), ("Brazo", "h_carry", 0.5, 0, 30),
-    ("Brazo", "h_bar", 0.5, 0, 30), ("Brazo", "h_floor", 0.5, 0, 30),
+    ("Brazo", "h_bar", 0.5, 0, 30), ("Brazo", "h_prism", 0.5, 0, 30), ("Brazo", "h_floor", 0.5, 0, 30),
     ("Garra", "claw_open", 2, 0, 180), ("Garra", "claw_cube", 2, 0, 180),
     ("Garra", "claw_ball", 2, 0, 180),
     ("Movimiento", "v_slow", 5, 10, 100), ("Movimiento", "v_ramp", 5, 10, 100),
@@ -162,6 +165,7 @@ GOAL_COLOR = "blue"
 TURN_SETTLE_S = 0.15
 TURN_TIMEOUT_S = 3.0
 FLAT_CONFIRM_S = 0.4
+CREST_DROP = 8           # grados que baja el pitch desde su máximo para dar por pasada la cima
 RAMP_TIMEOUT_S = 6.0
 STAIRS_TIMEOUT_S = 8.0
 SERVO_STEP_S = 0.35

@@ -17,6 +17,7 @@ cards = []               # [(color, odometría absoluta al detectarla)]
 results = []             # [(id, ok)]
 last_advance = 0         # cm del último acercamiento (para regresar lo mismo con "retreat")
 heading_ref = 0          # rumbo de mapa = hal.heading() + heading_ref (paso "ref")
+run_level = 1            # nivel en el que arrancó el autónomo
 
 
 def reset_state():
@@ -158,8 +159,17 @@ def to_tower():
     return lf.follow_until(lf.after_cm(adv), cfg.P["v_slow"], 8)
 
 
+def map_target(deg):
+    """Rumbo de mapa -> valor de hal.heading() al que hay que llegar por el camino corto.
+    hal.heading() acumula vueltas; sin normalizar, una recta podía "sostener" un rumbo a 360°
+    del real y torcerse (lo mostró el simulador)."""
+    now = hal.heading()
+    return now + motion.wrap180(deg - heading_ref - now)
+
+
 # ---------------------------------------------------------------- pasos
 def run_step(step):
+    global heading_ref
     kind = step[0]
     if kind == "line":
         green = len(step) > 4 and step[4]
@@ -176,15 +186,18 @@ def run_step(step):
     if kind == "ref":
         # "ahora miro hacia step[1] grados de mapa" (0 = este, 90 = sur; positivo = horario).
         # Se usa en una recta conocida para que los giros "head" no arrastren el error de rumbo.
-        global heading_ref
+        # ("ref", rumbo, nivel): solo si el autónomo ARRANCÓ en ese nivel (robot colocado a mano
+        # en la zona de inicio con ese rumbo).
+        if len(step) > 2 and step[2] != run_level:
+            return True
         heading_ref = step[1] - hal.heading()
         return True
     if kind == "head":
-        return motion.turn_to(step[1] - heading_ref)
+        return motion.turn_to(map_target(step[1]))
     if kind == "drive":
         # ("drive", rumbo, cm[, vel]): girar al rumbo de mapa y avanzar SOSTENIENDO ese rumbo
         # con el IMU (zona de obstáculos: no se arrastra el error del giro)
-        target = step[1] - heading_ref
+        target = map_target(step[1])
         speed = val(step[3]) if len(step) > 3 else cfg.P["v_slow"]
         motion.turn_to(target)
         return motion.straight(val(step[2]), speed, target=target)
@@ -193,7 +206,7 @@ def run_step(step):
         max_cm = val(step[2]) if len(step) > 2 else 60
         target = None
         if len(step) > 3:                      # rumbo de mapa opcional
-            target = step[3] - heading_ref
+            target = map_target(step[3])
             motion.turn_to(target)
         return motion.seek_line(speed, max_cm, target)
     if kind == "spin":
@@ -209,8 +222,40 @@ def run_step(step):
         return to_tower()
     if kind == "climb":
         return motion.climb()
+    if kind == "line_ref":
+        # ("line_ref", rumbo, cond, vel, timeout): sigue la línea hasta cond PROMEDIANDO el rumbo;
+        # al terminar, ese promedio es "rumbo" de mapa. En una recta el seguidor oscila y una sola
+        # lectura tenía ~4° de error; el promedio da la dirección de la línea.
+        cond = make_cond(step[2])
+        acc = [0.0, 0]
+
+        def cond2(bits, j):
+            acc[0] += hal.heading()
+            acc[1] += 1
+            return cond(bits, j)
+        ok = lf.follow_until(cond2, val(step[3]), step[4])
+        if acc[1] > 0:
+            heading_ref = step[1] - acc[0] / acc[1]
+        return ok
+    if kind == "if_start":
+        if step[1] != run_level:
+            return True
+        for sub in step[2]:
+            if not run_step(sub):
+                return False
+        return True
+    if kind == "crest":
+        # ("crest", cm[, rumbo[, color]]): con color, la referencia es ver ese color arriba;
+        # con rumbo de mapa, sube sosteniéndolo con el IMU (escalera de
+        # dos tramos: cada oruga debe ir sobre el suyo)
+        target = None
+        if len(step) > 2:
+            target = map_target(step[2])
+            motion.turn_to(target)
+        color = step[3] if len(step) > 3 else None
+        return motion.climb_crest(val(step[1]), target=target, color=color)
     if kind == "stairs":
-        return motion.stairs()
+        return motion.stairs(val(step[1]) if len(step) > 1 else None)
     if kind == "claw":
         gripper.claw(val(step[1]))
         return True
@@ -250,6 +295,8 @@ def run(start_level=1, budget_s=None, t_start=None):
     if t_start is None:
         t_start = hal.now()
     reset_state()
+    global run_level
+    run_level = start_level
     points = 0
     for m in ms.MISSIONS:
         if m["level"] < start_level:

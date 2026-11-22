@@ -47,14 +47,24 @@ pasillo y el tope desvían el rumbo al pisarlos.
 | La curva del nivel 3 empieza dentro de la zona azul (oscura) y se perdía la línea | `offset_from` resta el fondo |
 | Relanzar el autónomo sin apagar dejaba referencias viejas | `autonomous.reset_state()` limpia todo |
 | `detour` giraba hacia el lado equivocado al volver a la línea | gira hacia el lado del rodeo |
+| **Prisma (M7)**: empujado con el frente se sale de la línea en la primera curva, y para empujarlo hacia la zona el robot no cabe detrás | se **lleva con la garra abierta y baja** (`h_prism`), como cuna, siguiendo la línea; en la primera marca roja queda dentro de la zona punteada |
+| `turn_to` podía girar por el lado largo (239° en vez de 121°) y la recta sostenía un rumbo a 360° | camino corto (`wrap180`) y `map_target` para `head` / `drive` / `seek` |
+| La segunda marca roja va junto a la línea: solo la ve la sonda exterior | aproximación a `v_slow` |
+| **Escalera (M9)**: entre la escalera y la torre hay ~20 cm y el robot mide ~24 cm; esperar a quedar plano lo chocaba con la torre (a 100 % la confirmación de 0.4 s son 18 cm) | paso `crest`: sube sosteniendo el rumbo oeste con el IMU y se detiene a una distancia fija desde que ve la zona verde |
+| En la escalera cada oruga debe ir sobre su tramo (12 cm de hueco): 4° de error de rumbo bastaban para salirse | `line_ref`: la referencia se toma **promediando el rumbo** en la recta que llega a la escalera |
+| La línea pasa por encima de las zonas de color: las sondas centrales leen negro | los colores de zona se buscan con las cuatro sondas (`leave_color`, `crest`) |
+| `seek_line` releía la línea para confirmar y con ruido fallaba | usa la lectura que detuvo el avance |
+| Rodeo de la torre: el giro en el lugar barría la torre (~13 cm de radio) o volvía sobre una tarjeta | `TOWER_DETOUR` con rumbos absolutos, regreso entre dos tarjetas |
 
-## Estado (pista reconstruida, sin ruido)
+## Estado (pista reconstruida)
 
-Misiones 1 a 6 pasan con el juez. **Pendientes**: el prisma se sale de la línea en la primera
-curva de la S y no llega a la zona punteada (misión 7); en la escalera una oruga queda fuera de
-su tramo (misión 9: revisar `robot_w` / `belt_w` contra la separación de 12 cm y la alineación
-antes de subir); torre, tarjetas y meta (10 a 13) aún no se afinan. Detrás de la torre caben
-pocas tarjetas antes de volver a la línea: revisar dónde van en la pista real.
+Sin ruido, las misiones **1 a 10 pasan** con el juez arrancando en el nivel 1, 2 o 3, y la 11
+lee 4 de las 6 tarjetas. Monte Carlo con ruido (40 corridas): zona 5 en 90 % (desde el nivel 2);
+prisma 100 %, pelota 100 %, escalera 98 % (desde el nivel 3).
+
+**Pendiente (nivel 4)**: la lectura de tarjetas sigue de largo y sale de la arena (debe parar en
+la X azul o tras la última tarjeta); detrás de la torre solo caben 4 de las 6 tarjetas antes de
+volver a la línea; faltan la pelota en la casilla roja (12) y la meta (13).
 
 ## Límites
 

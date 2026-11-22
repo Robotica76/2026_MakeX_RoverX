@@ -206,9 +206,11 @@ class Sim:
         hf = self.arena.height(self.x + c * L / 2, self.y + s * L / 2)
         hr = self.arena.height(self.x - c * L / 2, self.y - s * L / 2)
         # una punta sin piso debajo (borde de un nivel) no cambia el pitch: queda apoyado al centro
-        if hf is None or abs(hf - self.z) > 6:
+        # (la escalera tiene ~34°: con la punta a L/2 = 9.5 cm la diferencia llega a ~6.5 cm)
+        lim = L / 2.0 + 1.0
+        if hf is None or abs(hf - self.z) > lim:
             hf = self.z
-        if hr is None or abs(hr - self.z) > 6:
+        if hr is None or abs(hr - self.z) > lim:
             hr = self.z
         self.pitch = math.degrees(math.atan2(hf - hr, L))
 
@@ -333,26 +335,72 @@ class Sim:
         self.contacts = hit
         return bool(hit)
 
+    def _local(self, x, y):
+        """Punto de la pista -> (adelante, izquierda) respecto al centro de giro."""
+        c, s = self.frame()
+        dx, dy = x - self.x, y - self.y
+        return dx * c + dy * s, -dx * s + dy * c
+
+    def _cradle(self):
+        """Garra abierta y baja como cuna: si el prisma cabe entre los dedos, lo lleva consigo
+        (sigue las curvas). Se suelta al subir el brazo, al cerrar la garra o al retroceder."""
+        pr = self.prism
+        b = self.body
+        h = pr["half"]
+        claw_h, _ = self.arm_h()
+        low = claw_h < ar.PRISM_H - 1.0 and not self.claw_closed()
+        r = self.claw_reach()
+        palm = r - 2.0 + h                       # el prisma apoyado contra la palma de la garra
+        if pr.get("cradled"):
+            back = (self.vl + self.vr) / 2.0 < -0.5
+            if not low or back:
+                pr["cradled"] = False
+                self.log.append((self.world.t, "suelta el prisma"))
+                return False
+            pr["x"], pr["y"] = self.to_world(palm, 0.0)
+            return True
+        if not low:
+            return False
+        f, l = self._local(pr["x"], pr["y"])
+        # dedos abiertos en V: un prisma que llega entre las puntas se encauza hacia la palma,
+        # siempre que quepa entre los dedos
+        fits = b.get("claw_open_w", 9.0) >= 2 * h
+        if fits and abs(l) <= b.get("claw_open_w", 9.0) / 2.0 - 0.5 and \
+                palm - 0.5 <= f <= r + b["claw_tip"] + h:
+            pr["cradled"] = True
+            self.log.append((self.world.t, "lleva el prisma en la garra"))
+            pr["x"], pr["y"] = self.to_world(palm, 0.0)
+            return True
+        return False
+
     def _push_prism(self):
         pr = self.prism
         if pr["lost"]:
             return
         h = pr["half"]
+        if not self._cradle():
+            self._shove(h)
+        zp = self.arena.height(pr["x"], pr["y"])
+        if zp is None or abs(zp - ar.Z[3]) > 1:
+            pr["lost"] = True
+            pr["cradled"] = False
+            self.log.append((self.world.t, "el prisma se cayó del nivel 3"))
+
+    def _shove(self, h):
+        pr = self.prism
         fp = self.footprint()
+        claw_h, _ = self.arm_h()
+        cp = self.claw_poly() if claw_h - 1.5 < ar.PRISM_H else None
         c, s = self.frame()
         for _ in range(12):
             poly = ar.rect_poly(pr["x"], pr["y"], 0.0, 2 * h, 2 * h)
-            if not ar.polys_overlap(fp, poly):
+            if not (ar.polys_overlap(fp, poly) or (cp and ar.polys_overlap(cp, poly))):
                 break
             pr["x"] += c * 0.25
             pr["y"] += s * 0.25
             if not pr.get("pushed"):
                 pr["pushed"] = True
                 self.log.append((self.world.t, "empuja el prisma"))
-        zp = self.arena.height(pr["x"], pr["y"])
-        if zp is None or abs(zp - ar.Z[3]) > 1:
-            pr["lost"] = True
-            self.log.append((self.world.t, "el prisma se cayó del nivel 3"))
 
     # ------------------------------------------------------------ garra y objetos
     def _carry(self):
@@ -364,8 +412,13 @@ class Sim:
         closed = self.claw_closed()
         if closed and self.held is None:
             cx, cy, cz = self.claw_point()
+            r = self.claw_reach()
             for name, o in self.objects.items():
-                if math.hypot(o["x"] - cx, o["y"] - cy) <= 2.0 and abs(o["z"] - cz) <= 2.0:
+                # los dedos abiertos encierran el objeto: de lado basta con que quepa entre ellos;
+                # hacia el frente la garra tiene ~2 cm de fondo
+                f, l = self._local(o["x"], o["y"])
+                side = max(0.5, (self.body.get("claw_open_w", 9.0) - o["size"]) / 2.0)
+                if abs(f - r) <= 2.0 and abs(l) <= side and abs(o["z"] - cz) <= 2.0:
                     self.held = name
                     o["held"] = True
                     o["on"] = None

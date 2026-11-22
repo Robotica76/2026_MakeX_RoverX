@@ -321,10 +321,12 @@ def test_abort_button_stops_runner(monkeypatch):
 def test_all_mission_steps_are_known_and_params_exist():
     known = {"line", "jturn", "center", "straight", "turn", "spin", "approach_ped", "approach_obj",
              "retreat", "to_tower", "climb", "stairs", "claw", "arm", "hold", "detour", "cards",
-             "drop_red", "stop_in", "wait", "seek", "ref", "head", "drive"}
+             "drop_red", "stop_in", "wait", "seek", "ref", "head", "drive", "crest", "if_start", "line_ref"}
     for m in ms.MISSIONS:
         for s in m["steps"]:
             assert s[0] in known, (m["id"], s)
+            if s[0] == "line_ref":
+                auto.make_cond(s[2])
             if s[0] == "line":
                 auto.make_cond(s[1])
                 auto.val(s[2])

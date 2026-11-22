@@ -205,10 +205,12 @@ def after_cm(cm):
     return cond
 
 
-def leave_color(name, probes=("L1", "R1")):
+def leave_color(name, probes=None):
     """Verdadero cuando las sondas, después de haber visto la zona de ese color, la dejan de ver
     (3 lecturas seguidas).
     Guarda la odometría en last_edge: es la referencia para medir desde el borde de la zona."""
+    if probes is None:
+        probes = cfg.PROBES     # la línea cruza la zona: las centrales leen negro
     state = {"n": 0, "seen": False}
 
     def cond(bits, j):

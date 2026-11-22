@@ -56,3 +56,10 @@ def test_referee_ignores_missions_before_start_level():
     res = run_auto.run_once(level=2, seed=0, noise=0.0, record=False, budget=5)
     ids = [m["id"] for m in res["report"]["missions"]]
     assert min(ids) == 4
+
+
+def test_level3_nominal_run_scores_level3():
+    res = run_auto.run_once(level=3, seed=0, noise=0.0, record=False, budget=50)
+    ok = {m["id"]: m["ok"] for m in res["report"]["missions"]}
+    for mid in (7, 8, 9):
+        assert ok[mid], (mid, res["events"][-5:])
