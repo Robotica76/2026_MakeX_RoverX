@@ -121,4 +121,6 @@ class Referee:
             notes.append("tocó la torre")
         if s.fallen:
             notes.append("CAÍDA: " + s.fallen)
-        return {"missions": out, "total": total, "cards_seen": seen, "notes": notes}
+        notes_tip = s.min_tip
+        return {"missions": out, "total": total, "cards_seen": seen, "notes": notes,
+                "min_tip_cm": round(notes_tip, 1)}

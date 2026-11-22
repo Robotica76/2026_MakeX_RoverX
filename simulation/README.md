@@ -11,6 +11,7 @@ python3 simulation/run_auto.py --level 2 --runs 40 --noise 1   # % de éxito por
 python3 simulation/run_auto.py --set v_line=55 --set kp=0.6    # probar parámetros de cfg.P
 python3 simulation/run_auto.py --true ref_rot_fwd=6    # el robot real difiere de lo configurado
 python3 simulation/run_auto.py --line-w 1.0            # línea de 10 mm (mínimo del reglamento)
+python3 simulation/run_auto.py --ramp-deg 40 --true com_h=11   # rampas de 40° y centro de masa alto
 ```
 
 Solo usa la biblioteca estándar de Python. Cada corrida escribe `build/sim/rover_sim.html`: una
@@ -25,7 +26,7 @@ lleva a ese momento; barra espaciadora = reproducir.
 | Archivo | Qué hace |
 | --- | --- |
 | [arena.py](arena.py) | Pista reconstruida de la vista superior del reglamento (1 px = 0.235 cm): líneas, zonas, marcas, alturas de niveles, rampas, escalera de dos tramos, muros del pasillo, props y tarjetas |
-| [physics.py](physics.py) | Orugas (zona muerta, retardo, patinaje, derrape al girar, carga en pendiente), encoders, giroscopio, pitch por la altura del piso, Quad RGB (luz, color y RGB por sonda), brazo y garra, objetos, empujar el prisma, choques y caídas |
+| [physics.py](physics.py) | Orugas (zona muerta, retardo, patinaje, derrape al girar, carga en pendiente), encoders, giroscopio, pitch por la altura del piso, **volcadura** por centro de masa + aceleración, Quad RGB (luz, color y RGB por sonda), brazo y garra, objetos, empujar el prisma, choques y caídas |
 | [referee.py](referee.py) | Juez independiente: revisa cada misión con las condiciones del reglamento |
 | [run_auto.py](run_auto.py) | Corrida, reporte, Monte Carlo y reproducción HTML |
 
@@ -56,6 +57,8 @@ pasillo y el tope desvían el rumbo al pisarlos.
 | En la escalera cada oruga debe ir sobre su tramo (12 cm de hueco): 4° de error de rumbo bastaban para salirse | `line_ref`: la referencia se toma **promediando el rumbo** en la recta que llega a la escalera |
 | La línea pasa por encima de las zonas de color: las sondas centrales leen negro | los colores de zona se buscan con las cuatro sondas (`leave_color`, `crest`) |
 | `seek_line` releía la línea para confirmar y con ruido fallaba | usa la lectura que detuvo el avance |
+| **Nivel 1 por comandos** (pedido del equipo): con rectas por odometría el cubo solo se tomaba en 62 % (error acumulado en ~1 m) | cada recta termina en una línea perpendicular (`cross`): 100 % de 40 corridas, también con línea de 10 mm |
+| **Volcadura**: la subida gradual de potencia casi no cambia el margen; lo que manda es la inclinación con la altura del centro de masa | brazo bajo y al frente en cada pendiente (`h_climb`): margen 1.8 → 3.9 cm (centro de masa a 11 cm, rampa 35°). Recortar la potencia en pendiente fuerte dejaba al robot parado a media rampa de 40°: se quitó. Limitar la potencia de cada oruga frenaba la dirección: solo se limita el avance |
 | Rodeo de la torre: el giro en el lugar barría la torre (~13 cm de radio) o volvía sobre una tarjeta | `TOWER_DETOUR` con rumbos absolutos, regreso entre dos tarjetas |
 
 ## Estado (pista reconstruida)

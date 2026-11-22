@@ -82,6 +82,13 @@ porque al subir o bajar el brazo la garra se acerca al robot. Para calibrar:
    horizontal; `dz` negativo si la garra queda abajo).
 4. Comprobar con el menú: ir a `h_pedestal` y presionar **A**. La garra debe quedar a esa altura.
 
+## Centro de masa y volcadura
+
+`com_fwd`, `com_h` y `arm_mass` (TODO medir) los usa el simulador para saber si el robot se vuelca
+en rampas y escalera: se vuelca si la línea de gravedad + inercia que pasa por el centro de masa
+cae detrás de la punta trasera de las orugas. Para medirlos: equilibrar el robot sobre un lápiz
+de lado (adelante/atrás) y de frente inclinándolo hasta que caiga (altura).
+
 ## Por qué cambió la lectura de la línea
 
 La línea mide 20 mm ±50%, así que puede tener **apenas 10 mm**. Esto pasaba antes:
@@ -101,10 +108,10 @@ Esto es lo que se hace ahora:
    mesa y si cambia la luz**.
 3. **Cruces con memoria** (`cross_win`): basta con que cada sonda exterior haya visto negro
    dentro de unos cm de avance, no al mismo tiempo.
-4. **Giros por ruta**: el nivel 1 se recorre con una tabla de cruces y giros (`ROUTE_L1` en
-   [missions.py](../software/autonomous/missions.py)), no con el verde. Al cerrar un cruce, el
-   robot avanza lo que falta de `sensor_fwd` y gira sobre él. Las marcas verdes quedan como
-   opción (`green = 1`).
+4. **Nivel 1 por comandos**: no se sigue la línea; rectas con rumbo del IMU que terminan al cruzar
+   una línea perpendicular (las dos sondas exteriores con negro fuerte, `cross_th`), ver
+   [missions.py](../software/autonomous/missions.py). Las marcas verdes quedan como opción
+   (`green = 1`) para rutas que sí siguen la línea.
 
 Recomendación de hardware: probar alturas del Quad RGB con [api_check](../tools/robot/api_check.py)
 (página *Línea*) y elegir la que dé **más contraste** entre blanco y negro con la línea entre

@@ -72,14 +72,14 @@ def geometry_warnings():
 
 
 def run_once(level=1, seed=0, noise=0.0, line_w=2.0, prog=None, true=None, budget=None,
-             record=True):
+             record=True, ramp_deg=None):
     """Una corrida completa. Devuelve un dict con el reporte, el trazo y los eventos."""
     cfg.P.clear()
     cfg.P.update(copy.deepcopy(P0))
     cfg.P.update(prog or {})
     cfg.LINE_CAL.clear()
     cfg.LINE_CAL.update(copy.deepcopy(CAL0))
-    arena = ar.Arena(line_w=line_w, seed=seed)
+    arena = ar.Arena(line_w=line_w, seed=seed, ramp_deg=ramp_deg)
     log = []
     sim = physics.Sim(world, cfg, geo, arena, level=level, noise=noise, seed=seed,
                       true_overrides=true, log=log)
@@ -150,6 +150,7 @@ def run_once(level=1, seed=0, noise=0.0, line_w=2.0, prog=None, true=None, budge
         "robot": {k: cfg.P[k] for k in ("track_len", "robot_w", "belt_w", "sensor_fwd",
                                         "ref_rot_fwd", "probe_pitch", "claw_tip")},
         "params": {"level": level, "seed": seed, "noise": noise, "line_w": line_w,
+                   "ramp_deg": ramp_deg,
                    "prog": prog or {}, "true": true or {}, "cards": arena.card_colors},
         "missions": [{"id": m["id"], "name": m["name"], "pts": m["pts"], "level": m["level"]}
                      for m in ms.MISSIONS],
@@ -168,20 +169,21 @@ def print_report(res):
         pgs = "-" if pg is None else ("OK" if pg else "falla")
         print("%-4d %-22s %6d %10s %8s" % (m["id"], names[m["id"]], m["pts"], pgs,
                                             "OK" if m["ok"] else "no"))
-    print("Total juez: %d   (el programa estima %d)   tiempo %.1f s"
-          % (rep["total"], rep["program_points"], rep["time"]))
+    print("Total juez: %d   (el programa estima %d)   tiempo %.1f s   margen mínimo contra volcadura %.1f cm"
+          % (rep["total"], rep["program_points"], rep["time"], rep["min_tip_cm"]))
     for n in rep["notes"] + rep["warnings"]:
         print("  ! " + n)
     if rep["error"]:
         print(rep["error"])
 
 
-def monte_carlo(n, level, noise, line_w, prog, true, seed0=0):
+def monte_carlo(n, level, noise, line_w, prog, true, seed0=0, ramp_deg=None, budget=None):
     ok = {}
     totals = []
     falls = 0
     for i in range(n):
-        res = run_once(level, seed0 + i, noise, line_w, prog, true, record=False)
+        res = run_once(level, seed0 + i, noise, line_w, prog, true, budget, record=False,
+                       ramp_deg=ramp_deg)
         rep = res["report"]
         totals.append(rep["total"])
         falls += 1 if any(x.startswith("CAÍDA") for x in rep["notes"]) else 0
@@ -209,6 +211,8 @@ def main(argv=None):
     ap.add_argument("--set", action="append", help="parámetro del programa clave=valor (cfg.P)")
     ap.add_argument("--true", action="append", help="medida real del robot distinta: clave=valor")
     ap.add_argument("--budget", type=float, default=None, help="segundos para el autónomo")
+    ap.add_argument("--ramp-deg", type=float, default=None,
+                    help="inclinación de las rampas (reglamento: hasta 40°; plano: ~22°)")
     ap.add_argument("--runs", type=int, default=1, help="> 1 = Monte Carlo (sin reporte HTML)")
     ap.add_argument("--out", default=str(ROOT / "build" / "sim" / "rover_sim.html"))
     ap.add_argument("--no-open", action="store_true")
@@ -216,9 +220,9 @@ def main(argv=None):
     prog = parse_kv(a.set)
     true = parse_kv(a.true)
     if a.runs > 1:
-        monte_carlo(a.runs, a.level, a.noise, a.line_w, prog, true, a.seed)
+        monte_carlo(a.runs, a.level, a.noise, a.line_w, prog, true, a.seed, a.ramp_deg, a.budget)
         return 0
-    res = run_once(a.level, a.seed, a.noise, a.line_w, prog, true, a.budget)
+    res = run_once(a.level, a.seed, a.noise, a.line_w, prog, true, a.budget, ramp_deg=a.ramp_deg)
     print_report(res)
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)

@@ -64,6 +64,8 @@ class Sim:
         self.z = arena.height(x, y)
         self.pitch = 0.0
         self.t_phys = 0.0
+        self.acc = 0.0                  # aceleración longitudinal filtrada (cm/s²)
+        self.min_tip = 99.0             # menor margen contra volcadura de la corrida (cm)
         self.contacts = set()           # props tocados ahora (para registrar el inicio del choque)
         self._hit_logged = {}
         self.bumps = set()
@@ -146,8 +148,12 @@ class Sim:
         if tr != 0:
             tr -= load
         a = dt / self.tau
+        v_old = (self.vl + self.vr) / 2.0
         self.vl += (tl - self.vl) * min(1.0, a)
         self.vr += (tr - self.vr) * min(1.0, a)
+        acc = ((self.vl + self.vr) / 2.0 - v_old) / dt
+        self.acc += (acc - self.acc) * min(1.0, dt / 0.03)
+        self._check_tip()
         # encoders: giro de la rueda (sin patinaje); convención de signo de mbot2
         d = b["sprocket_d"]
         dl = self.vl * dt / (math.pi * d) * 360.0
@@ -168,6 +174,7 @@ class Sim:
         if self._blocked(nx, ny, nyaw):
             self.vl *= 0.3
             self.vr *= 0.3
+            self.acc = 0.0              # el golpe contra un prop no cuenta para volcar
             nx, ny, nyaw = self.x, self.y, self.yaw
         self._move_to(nx, ny, nyaw)
         self.t_phys += dt
@@ -213,6 +220,32 @@ class Sim:
         if hr is None or abs(hr - self.z) > lim:
             hr = self.z
         self.pitch = math.degrees(math.atan2(hf - hr, L))
+
+    def com(self):
+        """Centro de masa (adelante, altura) en cm, en el marco del robot: chasis + brazo."""
+        b = self.body
+        m = b.get("arm_mass", 0.15)
+        h, _ = self.arm_h()
+        x = (1 - m) * b.get("com_fwd", -1.0) + m * self.claw_reach()
+        z = (1 - m) * b.get("com_h", 6.5) + m * h
+        return x, z
+
+    def tip_margin(self):
+        """cm entre el punto donde la gravedad + la inercia cruzan el piso y la punta de la oruga
+        más cercana (negativo = se vuelca). Positivo hacia adelante = margen trasero."""
+        L = self.body["track_len"]
+        xc, zc = self.com()
+        g = 981.0
+        p = math.radians(self.pitch)
+        x_hit = xc - zc * (g * math.sin(p) + self.acc) / (g * math.cos(p))
+        return min(x_hit + L / 2.0, L / 2.0 - x_hit), x_hit
+
+    def _check_tip(self):
+        margin, x_hit = self.tip_margin()
+        self.min_tip = min(self.min_tip, margin)
+        if margin < 0:
+            self._fall("se volcó hacia %s (pitch %.0f°, aceleración %.0f cm/s²)"
+                       % ("atrás" if x_hit < 0 else "adelante", self.pitch, self.acc))
 
     def _check_stairs(self):
         """En la escalera cada oruga debe ir sobre su tramo (hay 12 cm de hueco entre ellos)."""
@@ -381,7 +414,7 @@ class Sim:
         if not self._cradle():
             self._shove(h)
         zp = self.arena.height(pr["x"], pr["y"])
-        if zp is None or abs(zp - ar.Z[3]) > 1:
+        if zp is None or abs(zp - self.arena.Z[3]) > 1:
             pr["lost"] = True
             pr["cradled"] = False
             self.log.append((self.world.t, "el prisma se cayó del nivel 3"))

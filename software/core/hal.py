@@ -59,13 +59,46 @@ def wait(s):
 
 
 # ---------------------------------------------------------------- motores
+_last_cmd = [0.0, 0.0]
+_last_t = 0.0
+
+
+def _tip_guard(left, right):
+    """Control contra volcadura. Inclinado (rampa, escalera), un arranque brusco empuja el centro
+    de masa detrás de la punta de las orugas y el robot se voltea hacia atrás: la potencia solo
+    puede SUBIR tip_slew %/s. Bajar la potencia siempre está permitido.
+
+    No se recorta la potencia en pendientes fuertes: en una rampa de 40° eso dejaba al robot sin
+    fuerza a media subida (lo mostró el simulador). El otro control es el brazo (gripper.climb_pose)."""
+    global _last_t
+    t = now()
+    dt = t - _last_t
+    _last_t = t
+    # Se limita solo la potencia COMÚN (el avance); la diferencia entre orugas (la dirección)
+    # queda libre: limitarla también frenaba las correcciones de rumbo y en la escalera una oruga
+    # se salía de su tramo (lo mostró el simulador).
+    mean = (left + right) / 2.0
+    diff = (left - right) / 2.0
+    prev = (_last_cmd[0] + _last_cmd[1]) / 2.0
+    if abs(pitch()) >= cfg.P["tip_pitch"]:
+        step = cfg.P["tip_slew"] * clamp(dt, 0.0, 0.2)
+        if abs(mean) > abs(prev) + step:
+            mean = prev + step if mean > prev else prev - step
+    _last_cmd[0] = mean + diff
+    _last_cmd[1] = mean - diff
+    return mean + diff, mean - diff
+
+
 def drive(left, right):
     left = clamp(left, -100, 100)
     right = clamp(right, -100, 100)
+    left, right = _tip_guard(left, right)
     mbot2.drive_power(cfg.LEFT_SIGN * left, cfg.RIGHT_SIGN * right)
 
 
 def stop():
+    _last_cmd[0] = 0.0
+    _last_cmd[1] = 0.0
     mbot2.drive_power(0, 0)
 
 

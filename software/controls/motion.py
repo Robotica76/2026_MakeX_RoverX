@@ -145,7 +145,7 @@ def sees_color(name):
     return False
 
 
-def climb_crest(after_cm, speed=None, timeout=None, target=None, color=None):
+def climb_crest(after_cm, speed=None, timeout=None, target=None, color=None, arm_h=None):
     """Sube hasta pasar la cima (el pitch ya subió y empieza a bajar: el frente está arriba) y
     avanza after_cm medidos con encoder. Sirve cuando arriba no hay espacio para esperar a quedar
     plano (nivel 4: la torre está a ~20 cm de la escalera; lo mostró el simulador)."""
@@ -169,6 +169,8 @@ def climb_crest(after_cm, speed=None, timeout=None, target=None, color=None):
         if color is not None:
             # referencia exacta: las sondas centrales ven el color de la zona de arriba
             if top >= cfg.P["pitch_ramp"] and sees_color(color):
+                if arm_h is not None:      # el brazo se mueve mientras sigue avanzando (sin parar)
+                    hal.servo(cfg.SERVO_ARM, geo.arm_servo(arm_h))
                 return straight(after_cm, cfg.P["v_ramp"], target=target)
         elif top >= cfg.P["pitch_ramp"] and p <= top - cfg.CREST_DROP:
             return straight(after_cm, cfg.P["v_ramp"], target=target)   # aún en pendiente: con fuerza
@@ -225,6 +227,25 @@ def seek_line(speed=None, max_cm=60, target=None):
             return True
         return abs(hal.odometer_cm()) >= max_cm
     straight_until(cond, speed, t, target)
+    return found[0]
+
+
+def drive_to_cross(speed=None, max_cm=15, target=None):
+    """Avanza recto (IMU) hasta que las DOS sondas exteriores ven negro fuerte: una línea que
+    cruza el camino. No es seguir la línea: solo sirve de referencia para corregir la distancia.
+    Las marcas verdes y el tope no cuentan (cross_th). Devuelve True si encontró el cruce."""
+    if speed is None:
+        speed = cfg.P["v_slow"]
+    hal.reset_odometer()
+    found = [False]
+
+    def cond():
+        _, bits = hal.line_read()
+        if bits.get("L2x", bits["L2"]) and bits.get("R2x", bits["R2"]):
+            found[0] = True
+            return True
+        return abs(hal.odometer_cm()) >= max_cm
+    straight_until(cond, speed, 1.0 + max_cm / 6.0, target)
     return found[0]
 
 

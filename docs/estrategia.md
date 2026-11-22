@@ -8,16 +8,21 @@ pista**. Los giros, distancias y conteos se ajustan ahí, sin tocar la lógica.
 
 | Nivel | Inicio | Recorrido previsto | Primitivas |
 | --- | --- | --- | --- |
-| 1 | X roja | Red de líneas con un tope, hasta el pedestal del cubo al pie de la rampa. Tomar el cubo, volver a la línea y subir la rampa | Tabla de cruces y giros `ROUTE_L1` (`junction` + `jturn`), `approach_ped` (distancia desde el cruce + geometría; sin ultrasónico), garra, `hold` 5 s, `climb` (pitch) |
+| 1 | X roja | **Por comandos** (experiencia: seguir la línea delgada no funcionaba): "avanza X cm sosteniendo el rumbo Y" con el IMU; cada tramo termina en una línea que cruza el camino (`cross`) para reiniciar el error. Tomar el cubo, ir al pie de la rampa y subirla con control activo | `ref`, `drive`, `cross`, `approach_ped`, garra, `hold` 5 s; en la rampa: seguir la línea (no subir en diagonal), brazo bajo al frente (`h_climb`) y potencia que sube de a poco (`tip_slew`) |
 | 2 | Zona amarilla | Tramo hasta el pedestal: dejar el cubo. Pasillo entre muros sin línea, con recortes sueltos: cruzarlo recto con giroscopio. Rampa blanca | `line … junction` + `approach_ped`, `straight` lento, `spin` para recuperar la línea, `climb` |
 | 3 | Zona azul | Curva en S con el prisma sobre la línea: empujarlo hasta la marca roja y rodearlo. Pedestal de la pelota a un lado. Escalera | `line … color red` a velocidad de empuje, `detour`, `approach_obj` (pelota), `stairs` |
 | 4 | Zona verde | Torre fija sobre la línea: rodearla. Tarjetas de color junto a la barra: leerlas y recordar la roja. Regresar a la casilla roja y dejar la pelota. Seguir hasta la X azul y parar | `leave green` + `to_tower` (distancia desde la zona), `detour`, `cards`, `drop_red`, `stop_in blue` |
 
 ## Decisiones
 
-- **Giros por ruta, no por marcas verdes** (experiencia previa: con la línea delgada las marcas
-  fallaban). Los cruces se detectan "con memoria" y el robot gira con el centro de giro sobre
-  el cruce. Detalle en [geometria.md](geometria.md).
+- **Nivel 1 por comandos, no siguiendo la línea** (experiencia previa: con la línea delgada y las
+  marcas verdes fallaba). Rectas con rumbo absoluto del IMU que terminan en una línea
+  perpendicular; en el simulador, 100 % de 40 corridas con ruido (también con línea de 10 mm).
+- **Rampas y escalera con control activo contra volcadura**: brazo bajo y al frente durante la
+  pendiente (en el simulador, con el centro de masa a 11 cm y una rampa de 35°, el margen sube de
+  1.8 a 3.9 cm), potencia que sube de a poco mientras va inclinado, y seguir la línea o sostener
+  el rumbo para no subir en diagonal. El simulador calcula el margen contra volcadura de cada
+  corrida (`--ramp-deg` prueba rampas de hasta 40°, `--true com_h=…` un centro de masa distinto).
 - **Todo lo que depende del chasis va en `cfg.P`** y se ajusta desde el menú del CyberPi.
 - **El nivel de inicio se detecta por el color de la zona** (rojo, amarillo, azul o verde).
   Coincide con la regla de reinicio, y también se puede cambiar con el joystick del CyberPi.

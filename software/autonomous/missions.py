@@ -24,6 +24,7 @@
 #   ("head", rumbo)            girar hasta ese rumbo de mapa
 #   ("drive", rumbo, cm[, vel])  girar a ese rumbo y avanzar sosteniéndolo con el IMU
 #   ("spin", dir)              girar hasta encontrar la línea (1 der, -1 izq)
+#   ("cross", vel, max_cm[, rumbo])  recto hasta que las dos exteriores ven una línea que cruza
 #   ("seek"[, vel, max_cm, rumbo])  recto con giroscopio hasta que las sondas centrales vean línea
 #   ("approach_ped", altura, dist)  dejar la garra (a esa altura) sobre el centro de un pedestal
 #                              que está a `dist` cm del último cruce (medida de la pista)
@@ -44,14 +45,15 @@
 # critical=True: si falla, el robot quedó fuera de ruta y el autónomo se detiene (conviene
 # pedir reinicio en la zona del nivel). critical=False: se sigue con la siguiente misión.
 
-# ---- ruta del nivel 1: (cuántos cruces, tipo, giro al llegar). CONTAR EN PISTA.
-# Plano del reglamento (simulation/arena.py): de la X roja se baja por la vertical hasta el cruce
-# de la línea inferior y se gira a la izquierda; ahí se siguen 2 cruces (la T de la vertical
-# corta y el cruce frente al pedestal, pasando el tope gris). Giro 0 = seguir derecho.
-ROUTE_L1 = [
-    (1, "any", -90),
-]
-L1_CROSSES_TO_PEDESTAL = 2
+# ---- nivel 1 POR COMANDOS (experiencia del equipo: con la línea delgada y las marcas verdes
+# seguir la línea no funcionaba). Cada tramo es "avanza X cm sosteniendo el rumbo Y" con el IMU,
+# referido a cómo se coloca el robot en la zona roja (mirando al sur, sobre la línea vertical).
+# TODO(medir en pista): las distancias salen del plano (simulation/arena.py).
+L1_SOUTH_CM = 36.0          # de la zona roja al cruce de la línea inferior
+L1_EAST_CM = 61.2           # del cruce hasta tener las sondas sobre el cruce frente al cubo
+L1_CROSS_SLACK = 6.0        # cada tramo se queda corto esto y termina buscando el cruce
+L1_NORTH_CM = 18.4          # del cruce frente al cubo a la altura de la línea que sube a la rampa
+L1_TO_RAMP_CM = 16.2        # de ahí al pie de la rampa gris
 
 # ---- constantes de ruta (TODO: AJUSTAR EN PISTA; salen del plano y se probaron en el simulador)
 L1_BACK_CM = 2.0            # nivel 1: retroceso tras el cubo para poder girar sin barrer el pedestal
@@ -96,6 +98,7 @@ TOWER_DETOUR = [
 
 
 def junctions(route):
+    """Tabla (cruces, tipo, giro) -> pasos. Ya no la usa el nivel 1; queda para rutas por línea."""
     steps = []
     for n, kind, deg in route:
         steps.append(("line", ("junction", n, kind), "v_line", 10))
@@ -107,8 +110,13 @@ MISSIONS = [
     # ------------------------------------------------------------ NIVEL 1 (zona roja)
     {"id": 1, "level": 1, "pts": 50, "name": "Seguir linea", "critical": True,
      # termina en el cruce frente al cubo (es lo que pide la misión 1)
-     "steps": [("arm", "h_pedestal"), ("claw", "claw_open")] + junctions(ROUTE_L1) +
-              [("line", ("junction", L1_CROSSES_TO_PEDESTAL, "any"), "v_line", 12)]},
+     "steps": [("arm", "h_pedestal"), ("claw", "claw_open"),
+               ("ref", 90),                                   # colocado mirando al sur
+               # cada tramo termina en una línea que cruza el camino: el error se reinicia ahí
+               ("drive", 90, L1_SOUTH_CM - L1_CROSS_SLACK, "v_line"),
+               ("cross", "v_slow", 2 * L1_CROSS_SLACK, 90), ("center",),
+               ("drive", 0, L1_EAST_CM - L1_CROSS_SLACK, "v_line"),
+               ("cross", "v_slow", 2 * L1_CROSS_SLACK, 0)]},
     {"id": 2, "level": 1, "pts": 50, "name": "Tomar cubo", "critical": False,
      "steps": [("approach_ped", "h_pedestal", "ped1_from_cross"), ("claw", "claw_cube"),
                ("arm", "h_carry"), ("retreat",), ("hold",)]},
@@ -117,9 +125,13 @@ MISSIONS = [
      # girar sobre el cruce (lo mostró el simulador). Retrocede, gira al norte, busca la línea
      # punteada y la sigue por la rampa hasta la T del nivel 2 (siguiendo la línea y no recto:
      # así no se pasa la T).
-     "steps": [("straight", -L1_BACK_CM, "v_slow"), ("turn", -90), ("seek", "v_slow", 25),
-               ("center",), ("turn", 90), ("line", ("pitch",), "v_line", 10),
-               ("line", ("junction", 1, "any"), "v_ramp", 8)]},
+     # Hasta la rampa, por comandos. En la rampa, control activo: sigue la línea (no se cruza en
+     # diagonal), baja el brazo al frente (centro de masa más adelante y más bajo) y la potencia
+     # sube de a poco mientras va inclinado (hal._tip_guard).
+     "steps": [("straight", -L1_BACK_CM, "v_slow"),
+               ("drive", -90, L1_NORTH_CM), ("drive", 0, L1_TO_RAMP_CM),
+               ("line", ("pitch",), "v_slow", 6), ("arm", "h_climb"),
+               ("line", ("junction", 1, "any"), "v_ramp", 8), ("arm", "h_carry")]},
 
     # ------------------------------------------------------------ NIVEL 2 (zona amarilla)
     {"id": 4, "level": 2, "pts": 100, "name": "Dejar cubo", "critical": False,
@@ -135,7 +147,7 @@ MISSIONS = [
      # sigue la línea por la rampa blanca hasta salir de la zona azul (ya completamente dentro)
      # Al ver la zona azul avanza L3_IN_CM: ya completamente dentro, pero antes de la curva de la
      # S (que empieza dentro de la zona; con "salir de la zona" el robot ya la había pasado).
-     "steps": [("line", ("pitch",), "v_line", 12),
+     "steps": [("line", ("pitch",), "v_line", 12), ("arm", "h_climb"),
                ("line", ("color", "blue"), "v_ramp", 8),
                ("ref", 90),                       # después de 30 cm de recta en la rampa, al sur
                ("line", ("cm", L3_IN_CM), "v_slow", 4)]},
@@ -164,7 +176,10 @@ MISSIONS = [
      # centrado) y se sube sosteniendo el rumbo oeste con el IMU.
      "steps": [("line", ("cm", 11), "v_slow", 6),            # hasta el tramo recto final
                ("line_ref", 180, ("pitch",), "v_slow", 10),     # rumbo de la recta = oeste
-               ("crest", STAIRS_TOP_CM, 180, "green")]},
+               ("arm", "h_climb"),
+               # al ver la verde el brazo sube SIN detenerse (con el brazo bajo la garra llega ~5 cm
+               # más lejos y tocaba la torre; parar en la escalera hacía resbalar al robot)
+               ("crest", STAIRS_TOP_CM, 180, "green", "h_carry")]},
 
     # ------------------------------------------------------------ NIVEL 4 (zona verde)
     {"id": 10, "level": 4, "pts": 100, "name": "Evitar torre", "critical": True,

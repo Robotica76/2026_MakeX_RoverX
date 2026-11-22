@@ -201,6 +201,12 @@ def run_step(step):
         speed = val(step[3]) if len(step) > 3 else cfg.P["v_slow"]
         motion.turn_to(target)
         return motion.straight(val(step[2]), speed, target=target)
+    if kind == "cross":
+        # ("cross", vel, max_cm[, rumbo]): recto hasta una línea que cruza el camino
+        target = map_target(step[3]) if len(step) > 3 else None
+        if target is not None:
+            motion.turn_to(target)
+        return motion.drive_to_cross(val(step[1]), val(step[2]), target)
     if kind == "seek":
         speed = val(step[1]) if len(step) > 1 else cfg.P["v_slow"]
         max_cm = val(step[2]) if len(step) > 2 else 60
@@ -245,7 +251,8 @@ def run_step(step):
                 return False
         return True
     if kind == "crest":
-        # ("crest", cm[, rumbo[, color]]): con color, la referencia es ver ese color arriba;
+        # ("crest", cm[, rumbo[, color[, altura]]]): con color, la referencia es ver ese color
+        # arriba; con altura, el brazo va a esa altura en ese momento sin detenerse;
         # con rumbo de mapa, sube sosteniéndolo con el IMU (escalera de
         # dos tramos: cada oruga debe ir sobre el suyo)
         target = None
@@ -253,7 +260,8 @@ def run_step(step):
             target = map_target(step[2])
             motion.turn_to(target)
         color = step[3] if len(step) > 3 else None
-        return motion.climb_crest(val(step[1]), target=target, color=color)
+        arm_h = val(step[4]) if len(step) > 4 else None
+        return motion.climb_crest(val(step[1]), target=target, color=color, arm_h=arm_h)
     if kind == "stairs":
         return motion.stairs(val(step[1]) if len(step) > 1 else None)
     if kind == "claw":

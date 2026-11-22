@@ -65,6 +65,11 @@ P = {
     "claw_open": 90,         # TODO(calibrar)
     "claw_cube": 35,         # TODO(calibrar)
     "claw_ball": 45,         # TODO(calibrar)
+    # centro de masa (lo usa el simulador para la volcadura; TODO medir: equilibrar el robot
+    # sobre un lápiz de frente y de lado)
+    "com_fwd": -1.0,         # TODO(medir) centro de masa del chasis, adelante del centro de giro
+    "com_h": 6.5,            # TODO(medir) altura del centro de masa del chasis sobre el piso
+    "arm_mass": 0.15,        # TODO(medir) fracción del peso que está en brazo + garra
     "claw_open_w": 9.0,      # TODO(medir) separación interior de los dedos con la garra abierta
                              # (el prisma mide ~7 cm de base en el plano; pregunta abierta)
 
@@ -96,6 +101,10 @@ P = {
     "pitch_ramp": 10,        # grados: ya va subiendo
     "pitch_flat": 4,         # grados: ya está plano arriba
     "ramp_margin": 3.0,      # cm extra para quedar "completamente dentro"
+    # control contra volcadura (activo en rampas y escalera)
+    "tip_pitch": 8,          # grados: desde aquí la potencia solo sube de a poco
+    "tip_slew": 120,         # %/s: cuánto puede subir la potencia por segundo inclinado
+    "h_climb": 8.0,          # garra baja y al frente al subir: adelanta y baja el centro de masa
 
     # --- medidas de la PISTA (MEDIR en la pista de prueba; sin ultrasónico son la referencia)
     # TODO(medir en pista): valores sacados del plano del reglamento (simulation/arena.py)
@@ -133,7 +142,8 @@ TUNE = [
     ("Garra", "claw_ball", 2, 0, 180),
     ("Movimiento", "v_slow", 5, 10, 100), ("Movimiento", "v_ramp", 5, 10, 100),
     ("Movimiento", "v_stairs", 5, 10, 100), ("Movimiento", "v_turn_min", 1, 5, 60),
-    ("Movimiento", "turn_kp", 0.1, 0.1, 5), ("Movimiento", "head_kp", 0.1, 0, 5),
+    ("Movimiento", "turn_kp", 0.1, 0.1, 5),
+    ("Movimiento", "tip_slew", 10, 20, 400), ("Brazo", "h_climb", 0.5, 0, 30), ("Movimiento", "head_kp", 0.1, 0, 5),
     ("Pista", "ped1_from_cross", 0.5, 0, 60), ("Pista", "ped2_from_cross", 0.5, 0, 60),
     ("Pista", "ball_ped_dist", 0.5, 0, 60), ("Pista", "tower_from_edge", 0.5, 0, 100),
     ("Pista", "side_margin", 0.5, 0, 15), ("Pista", "bar_side", 2, -1, 1),

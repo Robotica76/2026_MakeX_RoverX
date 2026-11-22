@@ -165,8 +165,17 @@ class Arena:
 
     RES = 0.25          # cm por celda del raster
 
-    def __init__(self, line_w=2.0, seed=0, card_colors=None, n_obstacles=4):
+    def __init__(self, line_w=2.0, seed=0, card_colors=None, n_obstacles=4, ramp_deg=None):
+        """ramp_deg: inclinación de las dos rampas (el reglamento permite hasta 40°); cambia la
+        altura de los niveles 2, 3 y 4 (la escalera sigue subiendo 20 cm)."""
         self.line_w = line_w
+        self.Z = dict(Z)
+        if ramp_deg is not None:
+            run = (RAMP1_PX[2] - RAMP1_PX[0]) * S
+            rise = math.tan(math.radians(ramp_deg)) * run
+            self.Z[2] = self.Z[1] + rise
+            self.Z[3] = self.Z[2] + rise
+            self.Z[4] = self.Z[3] + STAIR_STEPS * STAIR_RISE
         self.rng = random.Random(seed)
         self.nx = int(math.ceil(W_CM / self.RES))
         self.ny = int(math.ceil(H_CM / self.RES))
@@ -279,16 +288,16 @@ class Arena:
             return None
         if inside(self.ramp1, x, y):
             f = (x - self.ramp1[0]) / (self.ramp1[2] - self.ramp1[0])
-            return Z[1] + f * (Z[2] - Z[1])
+            return self.Z[1] + f * (self.Z[2] - self.Z[1])
         if inside(self.ramp2, x, y):
             f = (self.ramp2[3] - y) / (self.ramp2[3] - self.ramp2[1])
-            return Z[2] + f * (Z[3] - Z[2])
+            return self.Z[2] + f * (self.Z[3] - self.Z[2])
         if inside(self.stairs, x, y):
             f = (self.stairs[2] - x) / (self.stairs[2] - self.stairs[0])
-            return Z[3] + f * (Z[4] - Z[3])
+            return self.Z[3] + f * (self.Z[4] - self.Z[3])
         for lvl in (1, 2, 3, 4):
             if inside(self.levels[lvl], x, y):
-                return Z[lvl]
+                return self.Z[lvl]
         return None
 
     def surface(self, x, y):
@@ -327,7 +336,7 @@ class Arena:
             "red_marks": self.red_mark_polys(),
             "dotted": self.dotted,
             "levels": {str(k): r for k, r in self.levels.items()},
-            "z": {str(k): v for k, v in Z.items()},
+            "z": {str(k): round(v, 1) for k, v in self.Z.items()},
             "ramps": [self.ramp1, self.ramp2],
             "stairs": self.stairs, "flights": self.flights,
             "props": {k: {"rect": r, "h": h} for k, (r, h, _) in self.props.items()},
