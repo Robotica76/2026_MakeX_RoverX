@@ -24,6 +24,9 @@ class _QuadRGB:
     def get_blue(self, ch, index=1):
         return world.sensors["rgb"](ch)[2]
 
+    def get_light(self, ch, index=1):
+        return world.sensors["light"](ch)
+
     def set_led(self, color="white", index=1):
         pass
 

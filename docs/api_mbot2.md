@@ -36,7 +36,7 @@ import cyberpi, mbot2, mbuild, gamepad, time
 | `is_line("L1", 1)` | ✅ | Sondas `"L2" "L1" "R1" "R2"` |
 | `get_color_sta("L1")` | ✅ | Devuelve el nombre del color |
 | `get_red/get_green/get_blue("L1")` | ✅ | |
-| `get_light("L1")`, `get_ground_sta("all", 1)` | ✅ | |
+| `get_light("L1")`, `get_ground_sta("all", 1)` | ✅ | `get_light` es la base de la lectura analógica de la línea (rango ⚠️) |
 | `set_led(color="white")`, `off_led()` | ✅ | |
 
 ## Ultrasónico 2

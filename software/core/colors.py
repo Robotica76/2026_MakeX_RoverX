@@ -45,7 +45,7 @@ def normalize(name):
 
 
 def read(probe):
-    if cfg.COLOR_MODE == "nearest":
+    if cfg.P["color_mode"] == 1:
         return nearest(hal.probe_rgb(probe), cfg.COLOR_REF)
     return normalize(hal.probe_color_builtin(probe))
 

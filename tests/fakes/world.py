@@ -28,6 +28,7 @@ sensors = {
     "rgb": lambda probe: (230, 230, 230),
     "distance": lambda: 300,
     "pitch": lambda: 0,
+    "light": lambda probe: 10 if probe in ("L1", "R1") else 90,   # línea bajo el centro
 }
 
 
@@ -50,6 +51,7 @@ def reset():
         "rgb": lambda probe: (230, 230, 230),
         "distance": lambda: 300,
         "pitch": lambda: 0,
+        "light": lambda probe: 10 if probe in ("L1", "R1") else 90,
     })
 
 

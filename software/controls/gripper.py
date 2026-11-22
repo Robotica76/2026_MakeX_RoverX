@@ -1,7 +1,11 @@
-# Rover X 2026: garra (servo de cierre + servo de brazo).
+# Rover X 2026: garra (servo de cierre) + brazo de paralelogramo (servo de altura).
+#
+# El brazo se manda por ALTURA en cm (geometry.arm_servo convierte a ángulo del servo), así
+# que al cambiar el brazo solo se miden de nuevo arm_pivot_h, arm_len y arm_zero.
 
 import hal
 import config as cfg
+import geometry as geo
 
 
 def _move(port, angle):
@@ -9,21 +13,22 @@ def _move(port, angle):
     hal.wait(cfg.SERVO_STEP_S)
 
 
+def claw(angle):
+    _move(cfg.SERVO_CLAW, angle)
+
+
 def open_claw():
-    _move(cfg.SERVO_CLAW, cfg.CLAW_OPEN)
+    claw(cfg.P["claw_open"])
 
 
-def close_claw(angle=None):
-    _move(cfg.SERVO_CLAW, cfg.CLAW_CLOSED if angle is None else angle)
-
-
-def lift(angle):
-    _move(cfg.SERVO_LIFT, angle)
+def arm_to(h):
+    """Garra a la altura h (cm sobre el piso)."""
+    _move(cfg.SERVO_ARM, geo.arm_servo(h))
 
 
 def home():
     """Posición de viaje: brazo arriba, garra abierta."""
-    lift(cfg.LIFT_UP)
+    arm_to(cfg.P["h_carry"])
     open_claw()
 
 

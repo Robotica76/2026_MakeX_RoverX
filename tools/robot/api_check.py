@@ -4,7 +4,8 @@
 # docs/api_mbot2.md y llenar los valores "CALIBRAR" de software/core/config.py.
 #
 # Joystick del CyberPi: arriba/abajo cambia de página. A ejecuta la prueba de la página.
-#   0 Línea   : offset y get_line_sta. Poner UNA sonda sobre negro para leer su bit.
+#   0 Línea   : offset, get_line_sta y luz por sonda. Poner UNA sonda sobre negro para leer su
+#               bit; con la línea entre dos sondas, ver cuánto baja la luz de cada una.
 #   1 Colores : nombre (get_color_sta) y RGB de cada sonda, para COLOR_REF.
 #   2 IMU     : rotación z, yaw, pitch. Girar a la derecha / levantar la nariz y ver el signo.
 #   3 Motores : A = drive_power(40, -40) 1 s. Debe AVANZAR. Muestra grados del encoder.
@@ -50,7 +51,8 @@ def show_page():
         label(2, "line_sta %d  bin %s" % (sta, bin(sta)))
         label(3, "L2%d L1%d R1%d R2%d" % (q.is_line("L2", 1), q.is_line("L1", 1),
                                           q.is_line("R1", 1), q.is_line("R2", 1)))
-        label(4, "")
+        label(4, "luz %d %d %d %d" % (q.get_light("L2"), q.get_light("L1"),
+                                      q.get_light("R1"), q.get_light("R2")))
     elif p == "Colores":
         for i, pr in enumerate(("L2", "L1", "R1", "R2")):
             label(1 + i, "%s %s %d,%d,%d" % (pr, q.get_color_sta(pr), q.get_red(pr),

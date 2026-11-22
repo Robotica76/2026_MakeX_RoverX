@@ -6,6 +6,7 @@
 #   - heading(): grados acumulados, positivo = giro a la DERECHA
 #   - pitch(): grados, positivo = nariz ARRIBA
 #   - line_offset(): -100..100, negativo = la línea está a la IZQUIERDA del centro
+#   - darkness(): por sonda, 0 = blanco calibrado, 1 = negro calibrado
 # Referencia de la API: docs/api_mbot2.md
 
 import time
@@ -13,6 +14,7 @@ import cyberpi
 import mbot2
 import mbuild
 import config as cfg
+import geometry as geo
 
 # El control Bluetooth es opcional (en PC o sin dongle no existe el módulo).
 # Ojo: no asignar "gamepad = None"; el bundler renombra las variables globales.
@@ -22,7 +24,7 @@ try:
 except ImportError:
     _HAS_PAD = False
 
-PROBES = ("L2", "L1", "R1", "R2")
+PROBES = cfg.PROBES
 
 _heading_zero = 0
 _odo_zero = 0
@@ -78,8 +80,13 @@ def reset_odometer():
     _odo_zero = _encoder_deg()
 
 
+def odo_abs():
+    """Odometría absoluta (cm desde el arranque); no se reinicia."""
+    return _encoder_deg() * geo.cm_per_deg()
+
+
 def odometer_cm():
-    return (_encoder_deg() - _odo_zero) * cfg.CM_PER_DEG
+    return (_encoder_deg() - _odo_zero) * geo.cm_per_deg()
 
 
 def servo(port, angle):
@@ -105,16 +112,69 @@ def pitch():
 
 
 # ---------------------------------------------------------------- Quad RGB
+# Con línea delgada (10-30 mm) la línea puede quedar ENTRE dos sondas y el modo binario la
+# pierde. En line_mode = 1 se usa la luz de cada sonda calibrada contra blanco y negro: una
+# sonda medio cubierta da ~0.5 y el centro ponderado sigue siendo correcto.
+
+def probe_light(probe):
+    return mbuild.quad_rgb_sensor.get_light(probe)
+
+
+def darkness():
+    """Dict sonda -> 0..1 (0 = blanco, 1 = negro) según la calibración LINE_CAL."""
+    out = {}
+    for pr in PROBES:
+        white, black = cfg.LINE_CAL[pr]
+        span = white - black
+        if span < 1:
+            span = 1
+        out[pr] = clamp((white - probe_light(pr)) / span, 0, 1)
+    return out
+
+
+def offset_from(dk):
+    """Centro ponderado de la oscuridad -> -100..100 (función pura, probada en PC)."""
+    total = 0
+    acc = 0
+    for i in range(4):
+        d = dk[PROBES[i]]
+        total += d
+        acc += d * (i - 1.5)
+    if total < 0.05:
+        return 0
+    return clamp(acc / total / 1.5 * 100, -100, 100)
+
+
 def line_offset():
+    if cfg.P["line_mode"] == 1:
+        return offset_from(darkness())
     return cfg.LINE_SIGN * mbuild.quad_rgb_sensor.get_offset_track(cfg.LINE_SENSOR)
+
+
+def line_read():
+    """(offset, bits) con UNA sola lectura de las sondas (para el lazo de control)."""
+    if cfg.P["line_mode"] == 1:
+        dk = darkness()
+        th = cfg.P["dark_th"]
+        bits = {}
+        for pr in PROBES:
+            bits[pr] = dk[pr] >= th
+        return offset_from(dk), bits
+    return line_offset(), line_bits()
 
 
 def line_bits():
     """Dict sonda -> True si ve línea negra."""
-    sta = mbuild.quad_rgb_sensor.get_line_sta("all", cfg.LINE_SENSOR)
     out = {}
-    for p in PROBES:
-        out[p] = (sta & cfg.LINE_BIT[p]) != 0
+    if cfg.P["line_mode"] == 1:
+        dk = darkness()
+        th = cfg.P["dark_th"]
+        for pr in PROBES:
+            out[pr] = dk[pr] >= th
+        return out
+    sta = mbuild.quad_rgb_sensor.get_line_sta("all", cfg.LINE_SENSOR)
+    for pr in PROBES:
+        out[pr] = (sta & cfg.LINE_BIT[pr]) != 0
     return out
 
 

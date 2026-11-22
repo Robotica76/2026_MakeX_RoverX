@@ -9,9 +9,10 @@
 
 import hal
 import config as cfg
+import geometry as geo
 
-claw = cfg.CLAW_OPEN
-arm = cfg.LIFT_UP
+claw = cfg.P["claw_open"]
+arm = cfg.P["h_carry"]   # altura de la garra en cm (se convierte a ángulo con geometry)
 fast = True
 
 
@@ -52,7 +53,7 @@ def step(state):
 
     if hal.pad_key("N3"):
         # escalera: potencia máxima recta mientras se mantiene N3
-        hal.drive(cfg.SPEED_STAIRS, cfg.SPEED_STAIRS)
+        hal.drive(cfg.P["v_stairs"], cfg.P["v_stairs"])
         return
 
     f = cfg.PAD_Y_SIGN * shape(hal.pad_axis("Ly"))
@@ -72,18 +73,18 @@ def step(state):
     hal.drive(left, right)
 
     if hal.pad_key("L1"):
-        arm = hal.clamp(arm - 3, 0, 180)
+        arm = hal.clamp(arm + 0.3, 0, 40)
     elif hal.pad_key("L2"):
-        arm = hal.clamp(arm + 3, 0, 180)
+        arm = hal.clamp(arm - 0.3, 0, 40)
     if _edge(state, "N2"):
-        arm = cfg.LIFT_BAR
+        arm = cfg.P["h_bar"]
     if _edge(state, "N4"):
-        arm = cfg.LIFT_UP
+        arm = cfg.P["h_carry"]
     if hal.pad_key("R1"):
         claw = hal.clamp(claw + 3, 0, 180)
     elif hal.pad_key("R2"):
         claw = hal.clamp(claw - 3, 0, 180)
-    hal.servo(cfg.SERVO_LIFT, arm)
+    hal.servo(cfg.SERVO_ARM, geo.arm_servo(arm))
     hal.servo(cfg.SERVO_CLAW, claw)
 
 

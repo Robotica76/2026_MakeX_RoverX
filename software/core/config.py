@@ -1,83 +1,131 @@
-# Rover X 2026: constantes del robot (mBot2 + kit Rover).
+# Rover X 2026: configuración del robot (mBot2 + orugas + garra de dos servos).
 #
-# Todo lo que se ajusta en pista está aquí. Los valores marcados "CALIBRAR" son
-# estimaciones iniciales: se miden con tools/robot/api_check.py y en la pista de prueba.
+# Dos tipos de valores:
+#   - Constantes fijas (puertos, nombres de sondas): variables normales en MAYÚSCULAS.
+#   - Parámetros ajustables en pista: diccionario P. Se cambian desde el menú del CyberPi
+#     (software/core/settings.py), se guardan en el robot y se leen como cfg.P["clave"].
+#
+# Todas las distancias van en cm y los ángulos en grados. Lo marcado MEDIR sale del robot
+# real (ver docs/geometria.md); lo marcado CALIBRAR sale de tools/robot/api_check.py.
 
-# ---------------------------------------------------------------- puertos
+# ---------------------------------------------------------------- puertos (fijos)
 LINE_SENSOR = 1          # índice del Quad RGB (mbuild)
 US_SENSOR = 1            # índice del Ultrasónico 2
 SERVO_CLAW = "s1"        # garra (abrir / cerrar)
-SERVO_LIFT = "s2"        # brazo (subir / bajar)
+SERVO_ARM = "s2"         # brazo de paralelogramo (subir / bajar)
+PROBES = ("L2", "L1", "R1", "R2")
+PARAMS_FILE = "rover_params.json"
 
-# ---------------------------------------------------------------- signos (verificar con api_check)
+# ---------------------------------------------------------------- signos (CALIBRAR con api_check)
 LEFT_SIGN = 1            # EM1 = izquierda; avanzar = drive_power(+, -)
 RIGHT_SIGN = -1          # EM2 = derecha, invertido
-HEADING_SIGN = -1        # CALIBRAR: girar a la DERECHA debe dar rumbo POSITIVO
-PITCH_SIGN = 1           # CALIBRAR: nariz ARRIBA debe dar pitch POSITIVO
-LINE_SIGN = 1            # CALIBRAR: línea a la izquierda del sensor -> offset negativo
+HEADING_SIGN = -1        # girar a la DERECHA debe dar rumbo POSITIVO
+PITCH_SIGN = 1           # nariz ARRIBA debe dar pitch POSITIVO
+LINE_SIGN = 1            # (modo "builtin") línea a la izquierda -> offset negativo
 PAD_Y_SIGN = 1           # Ly positivo = adelante (ejemplo oficial)
+LINE_BIT = {"L2": 8, "L1": 4, "R1": 2, "R2": 1}   # bits de get_line_sta("all")
 
-# ---------------------------------------------------------------- velocidades (% de potencia)
-SPEED_LINE = 45
-SPEED_LINE_SLOW = 25
-SPEED_STRAIGHT = 45
-SPEED_TURN_MAX = 45
-SPEED_TURN_MIN = 18      # por debajo las orugas no giran
-SPEED_RAMP = 70
-SPEED_STAIRS = 100
-SPEED_PUSH = 30          # empujando el prisma
+LOOP_DT = 0.01           # s entre lecturas del control
 
-# ---------------------------------------------------------------- seguidor de línea (PID sobre offset -100..100)
-LINE_KP = 0.45
-LINE_KI = 0.0
-LINE_KD = 1.5
-LINE_I_MAX = 200
-LOOP_DT = 0.01           # s entre lecturas
-LOST_LINE_S = 0.6        # s sin línea antes de considerarla perdida
+# ---------------------------------------------------------------- parámetros ajustables
+P = {
+    # --- geometría del robot (MEDIR). Centro de giro = punto medio entre las orugas.
+    "track_w": 13.0,         # distancia entre centros de las orugas
+    "robot_len": 30.0,       # largo total con la garra en posición de viaje
+    "robot_w": 18.0,         # ancho total
+    "rear_len": 9.0,         # del centro de giro a la parte trasera
+    "sensor_fwd": 7.0,       # del centro de giro a las sondas del Quad RGB
+    "probe_pitch": 1.3,      # separación entre sondas vecinas del Quad RGB (MEDIR)
+    "us_fwd": 10.0,          # del centro de giro a la cara del ultrasónico
+    "claw_fwd": 20.0,        # del centro de giro al punto de agarre de la garra
+    "card_probe_fwd": 7.0,   # del centro de giro a la sonda que lee tarjetas
+    "sprocket_d": 4.4,       # diámetro efectivo de la rueda motriz de la oruga
+    "slip": 1.0,             # factor de patinaje (distancia real / teórica)
 
-# Bits de get_line_sta("all"): CALIBRAR con api_check (poner cada sonda sobre negro)
-LINE_BIT = {"L2": 8, "L1": 4, "R1": 2, "R2": 1}
+    # --- brazo de paralelogramo (MEDIR). Altura = altura del pivote + largo * sen(ángulo)
+    "arm_pivot_h": 9.0,      # altura del eje del servo del brazo sobre el piso
+    "arm_len": 8.0,          # largo de las barras del paralelogramo
+    "arm_grip_dz": -2.0,     # del extremo del brazo al centro de la garra (vertical)
+    "arm_zero": 90,          # ángulo del servo con el brazo HORIZONTAL (CALIBRAR)
+    "arm_dir": -1,           # +1 si subir el ángulo sube el brazo, -1 si lo baja
+    "h_floor": 2.5,          # altura de agarre: cubo/pelota en el piso
+    "h_pedestal": 12.5,      # sobre el pedestal (10 cm + medio cubo)
+    "h_carry": 17.0,         # transporte (>= 5 cm sobre la base)
+    "h_bar": 12.0,           # barra de pelotas (10 cm)
 
-# ---------------------------------------------------------------- giros con giroscopio
-TURN_KP = 1.0
-TURN_TOL_DEG = 2.5
-TURN_SETTLE_S = 0.15
-TURN_TIMEOUT_S = 3.0
-HEADING_KP = 1.2         # mantener rumbo al ir recto
+    # --- garra (CALIBRAR)
+    "claw_open": 90,
+    "claw_cube": 35,
+    "claw_ball": 45,
 
-# ---------------------------------------------------------------- odometría
-CM_PER_DEG = 0.0175      # CALIBRAR: avanzar 100 cm con mbot2.straight y leer grados del encoder
+    # --- línea
+    "line_mode": 1,          # 1 = analógico calibrado (recomendado), 0 = get_offset_track
+    "dark_th": 0.45,         # 0..1 desde qué oscuridad una sonda "ve" línea
+    "cross_win": 4.0,        # cm de avance en los que cuentan las dos sondas exteriores
+    "kp": 0.45,
+    "kd": 1.5,
+    "ki": 0.0,
+    "lost_s": 0.6,           # s sin línea antes de darla por perdida
+    "green": 0,              # 1 = girar con marcas verdes (opcional; la ruta no depende de ellas)
 
-# ---------------------------------------------------------------- rampas y escalera
-PITCH_ON_RAMP = 10       # grados: ya va subiendo
-PITCH_FLAT = 4           # grados: ya está plano arriba
-FLAT_CONFIRM_S = 0.4
-RAMP_EXTRA_CM = 12       # avanzar después de llegar plano (quedar "completamente dentro")
-RAMP_TIMEOUT_S = 6.0
-STAIRS_TIMEOUT_S = 8.0
+    # --- velocidades (% potencia)
+    "v_line": 45,
+    "v_slow": 25,
+    "v_straight": 45,
+    "v_turn_max": 45,
+    "v_turn_min": 18,
+    "v_ramp": 70,
+    "v_stairs": 100,
+    "v_push": 30,
 
-# ---------------------------------------------------------------- garra
-CLAW_OPEN = 90           # CALIBRAR
-CLAW_CLOSED = 30
-CLAW_BALL = 40           # cerrado para la pelota de 3 cm
-LIFT_DOWN = 170
-LIFT_PEDESTAL = 120      # altura del pedestal (10 cm)
-LIFT_UP = 60             # cubo / pelota >= 5 cm sobre la base
-LIFT_BAR = 100           # altura de la barra de pelotas (10 cm)
-SERVO_STEP_S = 0.35      # tiempo para que el servo llegue
-HOLD_VALID_S = 5.5       # reglamento: sostener >= 5 s
+    # --- giros y rampas
+    "turn_kp": 1.0,
+    "turn_tol": 2.5,
+    "head_kp": 1.2,
+    "pitch_ramp": 10,        # grados: ya va subiendo
+    "pitch_flat": 4,         # grados: ya está plano arriba
+    "ramp_margin": 3.0,      # cm extra para quedar "completamente dentro"
 
-# ---------------------------------------------------------------- pedestal / torre (ultrasónico, cm)
-PEDESTAL_APPROACH_CM = 6
-TOWER_DETECT_CM = 12
-TOWER_SIDE = "left"      # lado por donde se rodea la torre
-TOWER_OUT_CM = 18        # separación lateral
-TOWER_PASS_CM = 28       # largo para rebasarla por completo
+    # --- props
+    "ped_gap": 1.0,          # holgura entre la garra y el pedestal al acercarse
+    "tower_detect": 12.0,    # cm del ultrasónico para detectar la torre
+    "tower_size": 10.0,
+    "side_margin": 4.0,      # holgura lateral al rodear
+    "bar_side": -1,          # -1 = barra de pelotas a la izquierda de la línea, 1 = derecha
+    "bar_reach": 10.0,       # avance lateral hasta la barra
 
-# ---------------------------------------------------------------- colores
-# "builtin" usa get_color_sta del sensor; "nearest" usa la tabla de abajo (RGB calibrado).
-COLOR_MODE = "builtin"
-COLOR_REF = {            # CALIBRAR con api_check sobre cada tarjeta / zona
+    # --- colores
+    "color_mode": 0,         # 0 = nombre del sensor (get_color_sta), 1 = RGB más cercano
+}
+
+# Menú de ajustes: (grupo, clave, paso, mínimo, máximo). El orden es el del menú.
+TUNE = [
+    ("Linea", "kp", 0.05, 0, 3), ("Linea", "kd", 0.1, 0, 10), ("Linea", "v_line", 5, 10, 100),
+    ("Linea", "dark_th", 0.05, 0.1, 0.9), ("Linea", "cross_win", 0.5, 1, 15),
+    ("Linea", "line_mode", 1, 0, 1), ("Linea", "green", 1, 0, 1),
+    ("Geometria", "sensor_fwd", 0.5, 0, 30), ("Geometria", "us_fwd", 0.5, 0, 30),
+    ("Geometria", "claw_fwd", 0.5, 0, 40), ("Geometria", "card_probe_fwd", 0.5, 0, 30),
+    ("Geometria", "track_w", 0.5, 5, 30), ("Geometria", "robot_len", 0.5, 10, 50),
+    ("Geometria", "robot_w", 0.5, 10, 40), ("Geometria", "sprocket_d", 0.1, 2, 10),
+    ("Geometria", "slip", 0.02, 0.5, 1.5),
+    ("Brazo", "arm_zero", 2, 0, 180), ("Brazo", "arm_dir", 2, -1, 1),
+    ("Brazo", "arm_pivot_h", 0.5, 0, 30), ("Brazo", "arm_len", 0.5, 2, 30),
+    ("Brazo", "h_pedestal", 0.5, 0, 30), ("Brazo", "h_carry", 0.5, 0, 30),
+    ("Brazo", "h_bar", 0.5, 0, 30), ("Brazo", "h_floor", 0.5, 0, 30),
+    ("Garra", "claw_open", 2, 0, 180), ("Garra", "claw_cube", 2, 0, 180),
+    ("Garra", "claw_ball", 2, 0, 180),
+    ("Movimiento", "v_slow", 5, 10, 100), ("Movimiento", "v_ramp", 5, 10, 100),
+    ("Movimiento", "v_stairs", 5, 10, 100), ("Movimiento", "v_turn_min", 1, 5, 60),
+    ("Movimiento", "turn_kp", 0.1, 0.1, 5), ("Movimiento", "head_kp", 0.1, 0, 5),
+    ("Props", "ped_gap", 0.5, 0, 10), ("Props", "tower_detect", 1, 3, 40),
+    ("Props", "bar_side", 2, -1, 1), ("Props", "bar_reach", 0.5, 0, 30),
+]
+
+# Calibración de la línea por sonda: luz sobre blanco y sobre negro (menú "Calibrar linea").
+LINE_CAL = {"L2": [90, 10], "L1": [90, 10], "R1": [90, 10], "R2": [90, 10]}
+
+# Referencias RGB para color_mode = 1 (CALIBRAR con api_check sobre cada color)
+COLOR_REF = {
     "black": (20, 20, 20),
     "white": (230, 230, 230),
     "red": (200, 40, 40),
@@ -88,28 +136,26 @@ COLOR_REF = {            # CALIBRAR con api_check sobre cada tarjeta / zona
     "purple": (140, 60, 170),
 }
 COLOR_CONFIRM = 3        # lecturas iguales seguidas para aceptar un color
-CARD_PROBE = "R2"        # sonda que pasa sobre las tarjetas (CALIBRAR según pista)
+CARD_PROBE = "R2"        # sonda que pasa sobre las tarjetas
 CARD_COUNT = 6
 CARD_SCAN_MAX_CM = 120
-BAR_SIDE = "left"        # lado de la barra de pelotas respecto a la línea (nivel 4)
-BAR_APPROACH_CM = 10     # avance lateral hasta la barra
-BALL_OFFSET_CM = 0       # CALIBRAR: distancia entre la sonda de tarjetas y la garra
-GOAL_EXTRA_CM = 10       # avanzar tras detectar el azul para quedar completamente dentro
-
-# Zonas de inicio por nivel (reglamento: reinicio en la zona de color del nivel alcanzado)
 ZONE_LEVEL = {"red": 1, "yellow": 2, "blue": 3, "green": 4}
-GOAL_COLOR = "blue"      # meta (X azul) en el nivel 4
+GOAL_COLOR = "blue"
 
-# Marcas verdes de giro en intersecciones (nivel 1)
-GREEN_TURNS = True
-
-# ---------------------------------------------------------------- tiempos de partido
-MATCH_S = 300            # 5 minutos de reloj (reglamento 1.)
+# ---------------------------------------------------------------- tiempos
+TURN_SETTLE_S = 0.15
+TURN_TIMEOUT_S = 3.0
+FLAT_CONFIRM_S = 0.4
+RAMP_TIMEOUT_S = 6.0
+STAIRS_TIMEOUT_S = 8.0
+SERVO_STEP_S = 0.35
+HOLD_VALID_S = 5.5       # reglamento: sostener >= 5 s
+MATCH_S = 300
 AUTO_BUDGET_S = 300      # PREGUNTA ABIERTA: ¿el autónomo comparte los 5 min con el manual?
 
 # ---------------------------------------------------------------- control manual
 PAD_DEADZONE = 8
-PAD_EXPO = 0.5           # 0 = lineal, 1 = cúbico
+PAD_EXPO = 0.5
 PAD_FAST = 100
 PAD_SLOW = 45
 PAD_TURN_GAIN = 0.8

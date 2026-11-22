@@ -6,39 +6,45 @@
 
 import hal
 import config as cfg
+import geometry as geo
 import colors
 import motion
 import linefollow as lf
 import gripper
 import missions as ms
 
-cards = []               # [(color, cm desde el inicio del escaneo)]
-scan_end_cm = 0          # odometría al terminar el escaneo
+cards = []               # [(color, odometría absoluta al detectarla)]
 results = []             # [(id, ok)]
 
 
 def reset_state():
-    global cards, scan_end_cm, results
+    global cards, results
     cards = []
-    scan_end_cm = 0
     results = []
+
+
+def val(x):
+    """Número tal cual, o el valor actual del parámetro cfg.P con ese nombre."""
+    if isinstance(x, str):
+        return cfg.P[x]
+    return x
 
 
 # ---------------------------------------------------------------- condiciones de línea
 def make_cond(spec):
     kind = spec[0]
-    if kind == "cross":
-        return lf.at_intersection(spec[1])
+    if kind == "junction":
+        return lf.at_junction(spec[1], spec[2])
     if kind == "color":
         return lf.at_color(spec[1])
     if kind == "cm":
-        return lf.after_cm(spec[1])
+        return lf.after_cm(val(spec[1]))
     if kind == "obstacle":
-        return lf.obstacle_within(spec[1])
+        return lf.obstacle_within(val(spec[1]))
     if kind == "end":
         return lf.line_end()
     if kind == "pitch":
-        return lambda bits: hal.pitch() >= cfg.PITCH_ON_RAMP
+        return lf.pitch_above(cfg.P["pitch_ramp"])
     raise ValueError("condicion desconocida: %s" % kind)
 
 
@@ -52,15 +58,15 @@ def red_index(found):
 
 
 def scan_cards():
-    """Sigue la línea despacio y registra cada tarjeta de color (color + distancia)."""
-    global cards, scan_end_cm
+    """Sigue la línea despacio y registra cada tarjeta de color (color + odometría)."""
+    global cards
     cards = []
     lf.reset()
-    hal.reset_odometer()
+    start = hal.odo_abs()
     t0 = hal.now()
     last = "white"
     same = 0
-    while hal.now() - t0 < 15 and hal.odometer_cm() < cfg.CARD_SCAN_MAX_CM:
+    while hal.now() - t0 < 15 and hal.odo_abs() - start < cfg.CARD_SCAN_MAX_CM:
         if hal.abort_requested():
             break
         c = colors.read(cfg.CARD_PROBE)
@@ -69,16 +75,16 @@ def scan_cards():
         else:
             last = c
             same = 1
+        odo = hal.odo_abs()
         if same == cfg.COLOR_CONFIRM and colors.is_card_color(c):
-            if not cards or cards[-1][0] != c or hal.odometer_cm() - cards[-1][1] > 6:
-                cards.append((c, hal.odometer_cm()))
+            if not cards or cards[-1][0] != c or odo - cards[-1][1] > 6:
+                cards.append((c, odo))
                 colors.show(c)
                 if len(cards) >= cfg.CARD_COUNT:
                     break
-        lf.step(cfg.SPEED_LINE_SLOW)
+        lf.step(cfg.P["v_slow"])
         hal.wait(cfg.LOOP_DT)
     hal.stop()
-    scan_end_cm = hal.odometer_cm()
     return len(cards) > 0
 
 
@@ -86,59 +92,64 @@ def drop_red():
     i = red_index(cards)
     if i < 0:
         return False
-    back = scan_end_cm - cards[i][1] + cfg.BALL_OFFSET_CM
-    d = -1 if cfg.BAR_SIDE == "left" else 1
-    ok = motion.straight(-back, cfg.SPEED_LINE_SLOW)
-    ok = ok and motion.turn(90 * d)
-    gripper.lift(cfg.LIFT_BAR)
-    ok = ok and motion.straight(cfg.BAR_APPROACH_CM, cfg.SPEED_LINE_SLOW)
+    side = cfg.P["bar_side"]
+    ok = motion.straight(geo.card_to_center(cards[i][1], hal.odo_abs()), cfg.P["v_slow"])
+    ok = ok and motion.turn(90 * side)
+    gripper.arm_to(cfg.P["h_bar"])
+    ok = ok and motion.straight(cfg.P["bar_reach"], cfg.P["v_slow"])
     gripper.open_claw()
-    motion.straight(-cfg.BAR_APPROACH_CM, cfg.SPEED_LINE_SLOW)
-    gripper.lift(cfg.LIFT_UP)
-    motion.turn(-90 * d)
-    motion.spin_to_line(-d, timeout=1.5)
+    motion.straight(-cfg.P["bar_reach"], cfg.P["v_slow"])
+    gripper.arm_to(cfg.P["h_carry"])
+    motion.turn(-90 * side)
+    motion.spin_to_line(-side, timeout=1.5)
     return ok
 
 
 def stop_in(color):
-    if not lf.follow_until(lf.at_color(color, ("L2", "L1", "R1", "R2")), cfg.SPEED_LINE, 15):
+    if not lf.follow_until(lf.at_color(color, cfg.PROBES), cfg.P["v_line"], 15):
         return False
-    motion.straight(cfg.GOAL_EXTRA_CM, cfg.SPEED_LINE_SLOW)
+    motion.straight(geo.zone_extra(), cfg.P["v_slow"])
     hal.stop()
     return True
+
+
+def approach_pedestal(h):
+    target = geo.pedestal_us_target(val(h))
+    return motion.straight_until(lambda: 0 < hal.distance_cm() <= target,
+                                 cfg.P["v_slow"], 4.0)
 
 
 # ---------------------------------------------------------------- pasos
 def run_step(step):
     kind = step[0]
     if kind == "line":
-        return lf.follow_until(make_cond(step[1]), step[2], step[3], step[4])
+        green = len(step) > 4 and step[4]
+        return lf.follow_until(make_cond(step[1]), val(step[2]), step[3], green)
+    if kind == "jturn":
+        return lf.turn_at_junction(step[1])
     if kind == "straight":
-        return motion.straight(step[1])
-    if kind == "straight_slow":
-        return motion.straight(step[1], cfg.SPEED_LINE_SLOW)
+        speed = val(step[2]) if len(step) > 2 else cfg.P["v_straight"]
+        return motion.straight(val(step[1]), speed)
     if kind == "turn":
         return motion.turn(step[1])
     if kind == "spin":
         return motion.spin_to_line(step[1])
-    if kind == "approach":
-        target = step[1]
-        return motion.straight_until(lambda: 0 < hal.distance_cm() <= target,
-                                     cfg.SPEED_LINE_SLOW, 4.0)
+    if kind == "approach_ped":
+        return approach_pedestal(step[1])
     if kind == "climb":
         return motion.climb()
     if kind == "stairs":
         return motion.stairs()
     if kind == "claw":
-        gripper.close_claw(step[1])
+        gripper.claw(val(step[1]))
         return True
-    if kind == "lift":
-        gripper.lift(step[1])
+    if kind == "arm":
+        gripper.arm_to(val(step[1]))
         return True
     if kind == "hold":
         return gripper.hold()
     if kind == "detour":
-        return motion.detour()
+        return motion.detour(step[1])
     if kind == "cards":
         return scan_cards()
     if kind == "drop_red":
@@ -200,17 +211,22 @@ def detect_level():
 
 
 def choose_level():
-    """Pantalla de inicio: arriba/abajo cambia el nivel, A arranca. Sugiere el nivel por color."""
+    """Pantalla de inicio. Arriba/abajo: nivel. A: arrancar. Derecha: menú de ajustes.
+    Devuelve el nivel elegido, o 0 si se pidió el menú de ajustes."""
     level = detect_level()
+    hal.wait(0.3)
     while True:
         hal.show("Rover X - nivel %d" % level, line=0)
         hal.show("Arr/Abj nivel  A=GO", line=1)
+        hal.show("Der = ajustes", line=2)
         if hal.button("up"):
             level = level % 4 + 1
             hal.wait(0.25)
         elif hal.button("down"):
             level = (level - 2) % 4 + 1
             hal.wait(0.25)
+        elif hal.button("right"):
+            return 0
         elif hal.button("a"):
             return level
         hal.wait(0.02)

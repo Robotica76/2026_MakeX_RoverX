@@ -1,7 +1,8 @@
 # Rover X 2026: programa de competencia (mBot2 + kit Rover, MicroPython en el CyberPi).
 #
 # Flujo:
-#   encender -> menú de nivel (se sugiere por el color de la zona; Arr/Abj cambia)
+#   encender -> carga los parámetros guardados -> menú de nivel (sugerido por el color de
+#   la zona; Arr/Abj cambia; Derecha = menú de ajustes y calibración de línea)
 #   A (señal del juez) -> autónomo desde ese nivel   [B durante el autónomo = abortar]
 #   al terminar: A = control manual (alianza)  ·  B = volver al menú (reinicio)
 #   en manual: B en el CyberPi = volver al menú
@@ -13,6 +14,7 @@ import hal
 import autonomous as auto
 import manual
 import gripper
+import settings
 
 
 def after_auto_menu():
@@ -28,10 +30,16 @@ def after_auto_menu():
 
 
 def main():
+    settings.remember_defaults()
+    loaded = settings.load()
     hal.init()
+    hal.show("Parametros: %s" % ("guardados" if loaded else "de fabrica"), line=3)
     gripper.home()
     while True:
         level = auto.choose_level()
+        if level == 0:
+            settings.menu()
+            continue
         hal.clear_abort()
         hal.show("AUTONOMO nivel %d" % level, line=0)
         points = auto.run(level)
