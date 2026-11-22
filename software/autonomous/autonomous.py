@@ -157,6 +157,8 @@ def run_step(step):
     if kind == "straight":
         speed = val(step[2]) if len(step) > 2 else cfg.P["v_straight"]
         return motion.straight(val(step[1]), speed)
+    if kind == "center":
+        return motion.straight(geo.turn_advance(), cfg.P["v_slow"])
     if kind == "turn":
         return motion.turn(step[1])
     if kind == "spin":

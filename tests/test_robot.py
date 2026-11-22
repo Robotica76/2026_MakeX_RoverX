@@ -77,7 +77,8 @@ def test_offset_zero_without_line():
 def test_arm_horizontal_at_pivot_height():
     h = cfg.P["arm_pivot_h"] + cfg.P["arm_grip_dz"]
     assert geo.arm_servo(h) == pytest.approx(cfg.P["arm_zero"])
-    assert geo.claw_reach(h) == pytest.approx(cfg.P["claw_fwd"])
+    full = cfg.P["arm_pivot_fwd"] + cfg.P["arm_len"] + cfg.P["arm_grip_dx"]
+    assert geo.claw_reach(h) == pytest.approx(full)
 
 
 def test_arm_direction_and_limits():
@@ -90,7 +91,8 @@ def test_arm_direction_and_limits():
 
 
 def test_claw_gets_closer_when_arm_tilts():
-    assert geo.claw_reach(cfg.P["arm_pivot_h"] + 6) < cfg.P["claw_fwd"]
+    h0 = cfg.P["arm_pivot_h"] + cfg.P["arm_grip_dz"]
+    assert geo.claw_reach(h0 + 6) < geo.claw_reach(h0)
 
 
 def test_cm_per_deg_from_sprocket():
@@ -98,23 +100,42 @@ def test_cm_per_deg_from_sprocket():
     assert geo.cm_per_deg() == pytest.approx(1.0)
 
 
+def test_reference_point_shift():
+    # medidas desde el punto naranja; el punto medio de las orugas está 5 cm adelante
+    cfg.P.update({"ref_rot_fwd": 5, "sensor_fwd": 12, "card_probe_fwd": 12,
+                  "track_len": 22, "robot_w": 18, "belt_w": 4})
+    assert geo.turn_advance() == pytest.approx(7)
+    assert geo.card_to_center(100, 100) == pytest.approx(7)
+    assert geo.rear_len() == pytest.approx(11)
+    assert geo.track_w() == pytest.approx(14)
+    before = geo.claw_reach(cfg.P["h_carry"])
+    cfg.P["ref_rot_fwd"] = 0
+    assert geo.claw_reach(cfg.P["h_carry"]) == pytest.approx(before + 5)
+
+
+def test_front_len_is_claw_or_track():
+    cfg.P.update({"track_len": 22, "claw_tip": 3})
+    assert geo.front_len() >= geo.claw_reach(cfg.P["h_carry"]) + 3 - 1e-9
+    assert geo.front_len() >= 11
+    assert geo.robot_len() == pytest.approx(geo.rear_len() + geo.front_len())
+
+
 def test_geometry_driven_distances():
-    cfg.P.update({"claw_fwd": 20, "arm_len": 8, "sensor_fwd": 7})
-    h = cfg.P["arm_pivot_h"] + cfg.P["arm_grip_dz"]       # brazo horizontal
+    cfg.P.update({"sensor_fwd": 7, "ref_rot_fwd": 0})
+    h = cfg.P["h_pedestal"]
+    reach = geo.claw_reach(h)
     # pedestal a 12 cm del cruce; ya se avanzaron 3 cm desde que las sondas lo vieron
-    assert geo.pedestal_advance(h, 12, 3) == pytest.approx(12 - 20 + 7 - 3)
-    assert geo.reach_advance(15, h) == pytest.approx(15 - 20)
-    assert geo.card_to_center(100, 112) == pytest.approx(100 + cfg.P["card_probe_fwd"] - 112)
+    assert geo.pedestal_advance(h, 12, 3) == pytest.approx(12 - reach + 7 - 3)
+    assert geo.reach_advance(15, h) == pytest.approx(15 - reach)
     assert geo.detour_out() > cfg.P["robot_w"] / 2
-    assert geo.detour_pass() > cfg.P["robot_len"] + cfg.P["tower_size"]
+    assert geo.detour_pass() > geo.robot_len() + cfg.P["tower_size"]
 
 
 def test_tower_advance_leaves_margin():
-    cfg.P.update({"tower_from_edge": 40, "robot_len": 30, "rear_len": 9, "side_margin": 4,
-                  "sensor_fwd": 7})
-    # centro de giro al salir de la zona: -7; la punta (21 cm adelante) debe quedar a 4 cm de 40
-    assert geo.tower_advance(0) == pytest.approx(40 - 21 - 4 + 7)
-    assert geo.tower_advance(5) == pytest.approx(40 - 21 - 4 + 7 - 5)
+    cfg.P.update({"tower_from_edge": 40, "side_margin": 4, "sensor_fwd": 7, "ref_rot_fwd": 0})
+    front = geo.front_len()
+    assert geo.tower_advance(0) == pytest.approx(40 - front - 4 + 7)
+    assert geo.tower_advance(5) == pytest.approx(40 - front - 4 + 7 - 5)
 
 
 # ---------------------------------------------------------------- sin ultrasónico
@@ -298,7 +319,7 @@ def test_abort_button_stops_runner(monkeypatch):
 
 
 def test_all_mission_steps_are_known_and_params_exist():
-    known = {"line", "jturn", "straight", "turn", "spin", "approach_ped", "approach_obj",
+    known = {"line", "jturn", "center", "straight", "turn", "spin", "approach_ped", "approach_obj",
              "retreat", "to_tower", "climb", "stairs", "claw", "arm", "hold", "detour", "cards",
              "drop_red", "stop_in", "wait"}
     for m in ms.MISSIONS:

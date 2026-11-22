@@ -5,41 +5,48 @@ robot vive en `cfg.P` ([config.py](../software/core/config.py)), y las cuentas q
 están en [geometry.py](../software/core/geometry.py). Al cambiar el diseño (orugas, garra,
 posición del sensor) **se mide de nuevo; no se cambia el código**.
 
-## Qué medir (vista lateral y superior)
+## Qué medir
 
-Todas las distancias van en **cm** y se miden desde el **centro de giro**: el punto medio entre
-las dos orugas, a la mitad de su largo de contacto con el piso. Ese es el punto alrededor del
-cual gira el robot.
+La hoja para llenar, con la foto del robot propuesto, está en [medidas_robot.md](medidas_robot.md).
+
+Las distancias hacia adelante (`*_fwd`) se miden desde un **punto de referencia** fácil de
+ubicar: el punto naranja sobre la caja del mBot2. El robot gira alrededor del **punto medio de
+las orugas a lo largo**, que en este diseño queda adelante de la caja. `ref_rot_fwd` es esa
+diferencia, y [geometry.py](../software/core/geometry.py) pasa todas las medidas al centro de
+giro (`geometry.fwd`).
 
 ```text
- vista superior                                  vista lateral (brazo horizontal)
+ vista superior (adelante = derecha)              vista lateral (brazo horizontal)
 
-        |<---- robot_w ---->|                            arm_len
-   ┌────┬───────────────┬────┐                     pivote ●━━━━━━━━━● garra
-   │ o  │               │ o  │ ▲                          │           ┊ arm_grip_dz
-   │ r  │       ✛ centro│ r  │ │ rear_len                  │ arm_pivot_h
-   │ u  │       de giro │ u  │ ▼                           │
-   │ g  │<─ track_w ─>  │ g  │                      ───────┴──────── piso
-   │ a  │               │ a  │
-   └────┴───────────────┴────┘
-          ▲ sensor_fwd: hasta las sondas del Quad RGB (L2 L1 R1 R2, separadas probe_pitch)
-          ▲ claw_fwd: hasta el punto de agarre, con el brazo horizontal
-          ▲ card_probe_fwd: hasta la sonda que lee las tarjetas (CARD_PROBE)
-          robot_len: largo total
+  ┌──────── track_len ────────┐                      arm_len     arm_grip_dx
+  ████████████████████████████  ▲ belt_w          pivote ●━━━━━━━━━●┄┄┄┄◉ centro de la garra
+                                │                         │              ┊ arm_grip_dz
+        ●ref──►✛ centro         │ robot_w                 │ arm_pivot_h
+        ref_rot_fwd             │                  ───────┴──────────────────── piso
+  ████████████████████████████  ▼
+        ●ref ─────────► sondas del Quad RGB     sensor_fwd (y card_probe_fwd)
+        ●ref ─────────────────► pivote del brazo   arm_pivot_fwd
 ```
 
 | Clave | Qué es | Para qué se usa |
 | --- | --- | --- |
-| `sensor_fwd` | centro de giro → sondas del Quad RGB | Al detectar un cruce, avanzar esto para **girar sobre el cruce** |
+| `ref_rot_fwd` | referencia → punto medio de las orugas | Convertir todas las medidas al centro de giro |
+| `sensor_fwd` | referencia → sondas del Quad RGB | Al detectar un cruce, avanzar lo que falta para **girar sobre el cruce** |
+| `card_probe_fwd` | referencia → sonda que lee las tarjetas | Regresar exactamente a la tarjeta roja |
 | `probe_pitch` | separación entre sondas vecinas | Posición de cada sonda (calibración, pruebas) |
-| `claw_fwd` | centro de giro → punto de agarre (brazo horizontal) | Alcance de la garra: cuánto avanzar para llegar a un pedestal |
-| `card_probe_fwd` | centro de giro → sonda de tarjetas | Regresar exactamente a la tarjeta roja |
-| `track_w`, `robot_w`, `robot_len`, `rear_len` | dimensiones | Rodear la torre, quedar "completamente dentro" de un nivel o zona |
+| `track_len`, `belt_w`, `robot_w` | largo de la oruga, ancho de la banda, ancho total | Parte trasera (`track_len/2`), distancia entre orugas, rodear la torre, quedar "completamente dentro" |
+| `arm_pivot_fwd`, `arm_pivot_h` | posición del eje del servo del brazo | Alcance y altura de la garra |
+| `arm_len` | barras del paralelogramo, eje a eje | Igual |
+| `arm_grip_dx`, `arm_grip_dz` | del eje del extremo del brazo al centro de la garra | Igual |
+| `claw_tip` | del centro de la garra a su punta | Largo total hacia adelante |
 | `sprocket_d`, `slip` | rueda motriz de la oruga y patinaje | Convertir grados del encoder a cm |
-| `arm_pivot_h`, `arm_len`, `arm_grip_dz` | brazo de paralelogramo | Convertir **altura en cm → ángulo del servo** |
-| `arm_zero`, `arm_dir` | ángulo del servo con el brazo horizontal; sentido | Igual |
+| `arm_zero`, `arm_dir` | ángulo del servo con el brazo horizontal; sentido | Convertir **altura en cm → ángulo del servo** |
 | `h_floor`, `h_pedestal`, `h_carry`, `h_bar` | alturas de trabajo de la garra | Misiones 2, 4, 8, 12 y el control manual |
 | `claw_open`, `claw_cube`, `claw_ball` | ángulos del servo de la garra | Igual |
+
+Derivados (no se miden): alcance de la garra `claw_reach(h) = arm_pivot_fwd − ref_rot_fwd +
+arm_len·cos θ + arm_grip_dx`, distancia entre orugas `robot_w − belt_w`, parte trasera
+`track_len / 2`, frente = el mayor entre la garra (+ `claw_tip`) y la mitad de la oruga.
 
 ## Sin ultrasónico: medidas de la pista
 
@@ -55,8 +62,8 @@ del robot hace el resto.
 | `ball_ped_dist` | centro de la línea en la marca roja → centro del pedestal de la pelota | 8 |
 | `tower_from_edge` | borde de salida de la zona verde → cara cercana de la torre | 10 |
 
-Ejemplo (misión 2): cuando las sondas cierran el cruce, el centro de giro está `sensor_fwd`
-atrás de él. El robot avanza `ped1_from_cross − claw_reach(h_pedestal) + sensor_fwd − (lo ya
+Ejemplo (misión 2): cuando las sondas cierran el cruce, el centro de giro está
+`sensor_fwd − ref_rot_fwd` atrás de él. El robot avanza `ped1_from_cross − claw_reach(h_pedestal) + sensor_fwd − (lo ya
 avanzado)`, cierra la garra y regresa exactamente lo mismo (`retreat`).
 
 Si después se agrega un ultrasónico, se pone `HAS_US = True` en `config.py`. La condición
@@ -70,8 +77,9 @@ porque al subir o bajar el brazo la garra se acerca al robot. Para calibrar:
 
 1. Mover el brazo hasta que quede **horizontal** y anotar el ángulo del servo en `arm_zero`.
 2. Subir el ángulo: si el brazo sube, `arm_dir = 1`; si baja, `arm_dir = -1`.
-3. Medir `arm_pivot_h` (eje del servo al piso), `arm_len` (eje a eje de las barras) y
-   `arm_grip_dz` (del extremo del brazo al centro de la garra; negativo si queda abajo).
+3. Medir `arm_pivot_h` (eje del servo al piso), `arm_len` (eje a eje de las barras),
+   `arm_grip_dx` y `arm_grip_dz` (del eje del extremo del brazo al centro de la garra, con el brazo
+   horizontal; `dz` negativo si la garra queda abajo).
 4. Comprobar con el menú: ir a `h_pedestal` y presionar **A**. La garra debe quedar a esa altura.
 
 ## Por qué cambió la lectura de la línea

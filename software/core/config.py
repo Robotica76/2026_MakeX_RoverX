@@ -30,22 +30,27 @@ LOOP_DT = 0.01           # s entre lecturas del control
 
 # ---------------------------------------------------------------- parámetros ajustables
 P = {
-    # --- geometría del robot (MEDIR). Centro de giro = punto medio entre las orugas.
-    "track_w": 13.0,         # distancia entre centros de las orugas
-    "robot_len": 30.0,       # largo total con la garra en posición de viaje
-    "robot_w": 18.0,         # ancho total
-    "rear_len": 9.0,         # del centro de giro a la parte trasera
-    "sensor_fwd": 7.0,       # del centro de giro a las sondas del Quad RGB
-    "probe_pitch": 1.3,      # separación entre sondas vecinas del Quad RGB (MEDIR)
-    "claw_fwd": 20.0,        # del centro de giro al punto de agarre de la garra
-    "card_probe_fwd": 7.0,   # del centro de giro a la sonda que lee tarjetas
+    # --- geometría del robot (MEDIR, hoja en docs/medidas_robot.md).
+    # Las distancias "_fwd" se miden hacia adelante desde el PUNTO DE REFERENCIA (punto naranja
+    # sobre la caja del mBot2). El centro de giro real de un robot de orugas es el punto medio de
+    # las orugas a lo largo; ref_rot_fwd dice cuánto está adelante de la referencia.
+    "ref_rot_fwd": 0.0,      # referencia -> punto medio de las orugas (+ = adelante)
+    "track_len": 22.0,       # largo de la oruga (de punta a punta)
+    "belt_w": 4.0,           # ancho de la banda de cada oruga
+    "robot_w": 18.0,         # ancho total, de borde exterior a borde exterior de las orugas
+    "sensor_fwd": 7.0,       # referencia -> sondas del Quad RGB
+    "probe_pitch": 1.3,      # separación entre sondas vecinas del Quad RGB
+    "card_probe_fwd": 7.0,   # referencia -> sonda que lee las tarjetas (la misma barra del Quad RGB)
     "sprocket_d": 4.4,       # diámetro efectivo de la rueda motriz de la oruga
     "slip": 1.0,             # factor de patinaje (distancia real / teórica)
 
     # --- brazo de paralelogramo (MEDIR). Altura = altura del pivote + largo * sen(ángulo)
+    "arm_pivot_fwd": 9.0,    # referencia -> eje del servo del brazo (horizontal)
     "arm_pivot_h": 9.0,      # altura del eje del servo del brazo sobre el piso
-    "arm_len": 8.0,          # largo de las barras del paralelogramo
-    "arm_grip_dz": -2.0,     # del extremo del brazo al centro de la garra (vertical)
+    "arm_len": 8.0,          # largo de las barras del paralelogramo, eje a eje
+    "arm_grip_dx": 4.0,      # del eje del extremo del brazo al centro de la garra (horizontal)
+    "arm_grip_dz": -2.0,     # del eje del extremo del brazo al centro de la garra (vertical, - = abajo)
+    "claw_tip": 3.0,         # del centro de la garra a su punta delantera
     "arm_zero": 90,          # ángulo del servo con el brazo HORIZONTAL (CALIBRAR)
     "arm_dir": -1,           # +1 si subir el ángulo sube el brazo, -1 si lo baja
     "h_floor": 2.5,          # altura de agarre: cubo/pelota en el piso
@@ -105,13 +110,15 @@ TUNE = [
     ("Linea", "kp", 0.05, 0, 3), ("Linea", "kd", 0.1, 0, 10), ("Linea", "v_line", 5, 10, 100),
     ("Linea", "dark_th", 0.05, 0.1, 0.9), ("Linea", "cross_win", 0.5, 1, 15),
     ("Linea", "line_mode", 1, 0, 1), ("Linea", "green", 1, 0, 1),
-    ("Geometria", "sensor_fwd", 0.5, 0, 30), ("Geometria", "rear_len", 0.5, 0, 30),
-    ("Geometria", "claw_fwd", 0.5, 0, 40), ("Geometria", "card_probe_fwd", 0.5, 0, 30),
-    ("Geometria", "track_w", 0.5, 5, 30), ("Geometria", "robot_len", 0.5, 10, 50),
-    ("Geometria", "robot_w", 0.5, 10, 40), ("Geometria", "sprocket_d", 0.1, 2, 10),
+    ("Geometria", "ref_rot_fwd", 0.5, -20, 20), ("Geometria", "sensor_fwd", 0.5, -10, 40),
+    ("Geometria", "card_probe_fwd", 0.5, -10, 40), ("Geometria", "track_len", 0.5, 5, 50),
+    ("Geometria", "belt_w", 0.5, 1, 10), ("Geometria", "robot_w", 0.5, 10, 40),
+    ("Geometria", "sprocket_d", 0.1, 2, 10),
     ("Geometria", "slip", 0.02, 0.5, 1.5),
     ("Brazo", "arm_zero", 2, 0, 180), ("Brazo", "arm_dir", 2, -1, 1),
-    ("Brazo", "arm_pivot_h", 0.5, 0, 30), ("Brazo", "arm_len", 0.5, 2, 30),
+    ("Brazo", "arm_pivot_fwd", 0.5, -10, 40), ("Brazo", "arm_pivot_h", 0.5, 0, 30),
+    ("Brazo", "arm_len", 0.5, 2, 30), ("Brazo", "arm_grip_dx", 0.5, -10, 20),
+    ("Brazo", "arm_grip_dz", 0.5, -15, 15),
     ("Brazo", "h_pedestal", 0.5, 0, 30), ("Brazo", "h_carry", 0.5, 0, 30),
     ("Brazo", "h_bar", 0.5, 0, 30), ("Brazo", "h_floor", 0.5, 0, 30),
     ("Garra", "claw_open", 2, 0, 180), ("Garra", "claw_cube", 2, 0, 180),

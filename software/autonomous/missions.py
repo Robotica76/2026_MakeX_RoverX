@@ -15,6 +15,8 @@
 #        ("pitch",) empieza una rampa   ("obstacle", cm) solo si hay ultrasónico
 #   ("jturn", grados)          girar EN el último cruce (centro de giro sobre él) y alinear
 #   ("straight", cm[, vel])    recto con giroscopio (negativo = atrás)
+#   ("center",)                avanzar lo que hay de las sondas al centro de giro (para girar
+#                              sobre la marca o el cruce que acaban de ver las sondas)
 #   ("turn", grados)           giro relativo, positivo = derecha
 #   ("spin", dir)              girar hasta encontrar la línea (1 der, -1 izq)
 #   ("approach_ped", altura, dist)  dejar la garra (a esa altura) sobre el centro de un pedestal
@@ -90,7 +92,7 @@ MISSIONS = [
                ("straight", -6, "v_slow"), ("detour", TOWER_SIDE)]},
     {"id": 8, "level": 3, "pts": 100, "name": "Tomar pelota", "critical": False,
      "steps": [("line", ("color", "red"), "v_line", 10),
-               ("straight", "sensor_fwd", "v_slow"),          # centro de giro sobre la marca
+               ("center",),                                   # centro de giro sobre la marca
                ("turn", BALL_TURN), ("arm", "h_pedestal"), ("claw", "claw_open"),
                ("approach_obj", "h_pedestal", "ball_ped_dist"), ("claw", "claw_ball"),
                ("arm", "h_carry"), ("retreat",), ("hold",),

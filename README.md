@@ -3,7 +3,7 @@
 Software del equipo **Robótica 76** para la categoría **Rover X** (CreativaKids / MakeX México):
 un **mBot2 con kit Rover** programado en **MicroPython** en el CyberPi.
 
-> **Estado (2026-11-21):** el programa corre en PC con módulos simulados (43 pruebas). **No se
+> **Estado (2026-11-21):** el programa corre en PC con módulos simulados (50 pruebas). **No se
 > ha probado en el robot.** La ruta del autónomo es un borrador hecho con las vistas de la arena.
 
 ## Qué hace
@@ -27,7 +27,7 @@ fin -> A = control manual (alianza)  ·  B = volver al menú
 | [tools/robot/api_check.py](tools/robot/api_check.py) | Programa de prueba y calibración para el robot |
 | [tools/scripts/bundle_for_mblock.py](tools/scripts/bundle_for_mblock.py) | Junta todos los módulos en un solo archivo para mBlock |
 | [tests](tests) | Pruebas en PC con `cyberpi` / `mbot2` / `mbuild` / `gamepad` falsos |
-| [docs](docs) | [Resumen del reglamento](docs/reglamento.md), [geometría y ajustes en pista](docs/geometria.md), [estrategia](docs/estrategia.md), [API del mBot2](docs/api_mbot2.md), [control manual](docs/control_manual.md) |
+| [docs](docs) | [Resumen del reglamento](docs/reglamento.md), [hoja de medidas del robot](docs/medidas_robot.md), [geometría y ajustes en pista](docs/geometria.md), [estrategia](docs/estrategia.md), [API del mBot2](docs/api_mbot2.md), [control manual](docs/control_manual.md) |
 | [resources/reglamento](resources/reglamento) | PDF del reglamento y vistas de la arena |
 
 ## Uso
