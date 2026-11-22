@@ -90,8 +90,14 @@ class Sim:
         pr = ar.rect_px(*ar.PRISM_PX)
         self.prism = {"x": (pr[0] + pr[2]) / 2, "y": (pr[1] + pr[3]) / 2,
                       "half": (pr[2] - pr[0]) / 2, "lost": False}
-        # al reiniciar en un nivel alto se carga el objeto de ese tramo en la garra
-        self.start_held = {2: "cube", 4: "ball"}.get(level)
+        # arrancar en el nivel 2 o más = el tramo 1 ya terminó: el cubo está en el pedestal 2
+        if level >= 2:
+            p2 = a.props["pedestal2"][0]
+            self.objects["cube"].update(x=(p2[0] + p2[2]) / 2, y=(p2[1] + p2[3]) / 2,
+                                        z=a.height((p2[0] + p2[2]) / 2, (p2[1] + p2[3]) / 2)
+                                        + ar.PEDESTAL_H + ar.CUBE_SIZE / 2, on="pedestal2")
+        # al reiniciar en el nivel 4 se carga la pelota (misión 8 omitida por ahora)
+        self.start_held = {4: "ball"}.get(level)
         self.held = None
         self._servos = {}
         self.on_frame = None            # función llamada cada FRAME_S de tiempo simulado
@@ -128,6 +134,12 @@ class Sim:
         self.fallen = None
         self.contacts = set()
         self.placed_level = max(self.placed_level, level)
+        # regla: reiniciar en el nivel 2 o más con el cubo en la garra -> el cubo se retira
+        if self.held == "cube" and level >= 2:
+            o = self.objects["cube"]
+            o.update(held=False, on="fuera", x=-20, y=-20, z=-10)
+            self.held = None
+            self.log.append((self.world.t, "EQUIPO: se retira el cubo (no se dejó antes del reinicio)"))
         if self.held:
             self._carry()
 

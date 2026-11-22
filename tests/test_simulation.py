@@ -55,7 +55,7 @@ def test_runs_do_not_leak_state():
 def test_referee_ignores_missions_before_start_level():
     res = run_auto.run_once(level=2, seed=0, noise=0.0, record=False, budget=5)
     ids = [m["id"] for m in res["report"]["missions"]]
-    assert min(ids) == 4
+    assert min(ids) == 5          # la misión 4 es del tramo 1 (antes del reinicio en amarillo)
 
 
 def test_level3_nominal_run_scores_level3():

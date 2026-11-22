@@ -153,7 +153,7 @@ def run_once(level=1, seed=0, noise=0.0, line_w=2.0, prog=None, true=None, budge
         gripper.home()
         if sim.start_held:
             gripper.arm_to(cfg.P["h_carry"])
-            gripper.claw(cfg.P["claw_cube" if sim.start_held == "cube" else "claw_ball"])
+            gripper.claw(cfg.P["claw_ball"])
             sim.place_start_object()
         hal.reset_heading()
         t0 = world.t
@@ -169,7 +169,9 @@ def run_once(level=1, seed=0, noise=0.0, line_w=2.0, prog=None, true=None, budge
                 break
             except physics.Fallen:
                 sim.falls += 1
-                lvl = autonomous.current_level
+                # reinicio en la zona del último nivel subido (según el juez)
+                climbed = sum(1 for mid in (3, 6, 9) if mid in ref.done)
+                lvl = max(autonomous.current_level, 1 + climbed)
                 if not restarts or world.t + RESTART_S - t0 >= bud:
                     sim.fallen = sim.fallen or "caída"
                     break

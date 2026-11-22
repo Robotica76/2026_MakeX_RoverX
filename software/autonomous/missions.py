@@ -38,6 +38,7 @@
 #   ("climb",) / ("stairs"[, extra_cm])   subir rampa / escalera esperando a quedar plano
 #   ("if_skipped", id, [pasos]) / ("if_ran", id, [pasos])  según si la misión id se saltó (ya
 #                              estaba hecha antes de un reinicio) o se corrió en esta pasada
+#   ("if_placed", [pasos])       pasos si el robot recién fue colocado a mano (arranque o reinicio)
 #   ("if_start", nivel, [pasos])  pasos que solo se hacen si el autónomo arrancó en ese nivel
 #   ("crest", cm)              subir hasta pasar la cima y avanzar cm (poco espacio arriba)
 #   ("claw", apertura) / ("arm", altura)
@@ -47,8 +48,9 @@
 #
 # critical=True: si falla, el robot quedó fuera de ruta: pide reinicio en la zona del nivel
 # (cfg.RESTART_AT_ZONES) o se detiene. critical=False: se sigue con la siguiente misión.
-# end_level=True: completa el nivel (ya está completamente dentro del siguiente): con la
-# estrategia de reinicios, el robot se detiene y pide reinicio en la zona del siguiente nivel.
+# end_level=True: termina el tramo (el robot ya está completamente dentro del siguiente nivel y,
+# en el tramo 1, el cubo ya está en el pedestal): con la estrategia de reinicios, el robot se
+# detiene y pide reinicio en la zona de inicio del siguiente nivel.
 
 # ---- nivel 1 POR COMANDOS (experiencia del equipo: con la línea delgada y las marcas verdes
 # seguir la línea no funcionaba). Cada tramo es "avanza X cm sosteniendo el rumbo Y" con el IMU,
@@ -157,7 +159,7 @@ MISSIONS = [
     {"id": 2, "level": 1, "pts": 50, "name": "Tomar cubo", "critical": False,
      "steps": [("approach_ped", "h_pedestal", "ped1_from_cross"), ("claw", "claw_cube"),
                ("arm", "h_carry"), ("retreat",), ("hold",)]},
-    {"id": 3, "level": 1, "pts": 50, "name": "Subir nivel 2", "critical": True, "end_level": True,
+    {"id": 3, "level": 1, "pts": 50, "name": "Subir nivel 2", "critical": True,
      # El pedestal está a 8 cm del cruce y el robot barre ~13 cm al girar, así que no puede
      # girar sobre el cruce (lo mostró el simulador). Retrocede, gira al norte, busca la línea
      # punteada y la sigue por la rampa hasta la T del nivel 2 (siguiendo la línea y no recto:
@@ -173,7 +175,10 @@ MISSIONS = [
                ("arm", "h_carry")]},
 
     # ------------------------------------------------------------ NIVEL 2 (zona amarilla)
-    {"id": 4, "level": 2, "pts": 100, "name": "Dejar cubo", "critical": False,
+    # La misión 4 es parte del TRAMO 1 ("level" = zona desde la que se arranca): si se pide
+    # reinicio en la zona amarilla con el cubo en la garra, el cubo se le quita al robot. Por eso
+    # el tramo 1 termina al dejar el cubo en el pedestal del nivel 2, y ahí se pide el reinicio.
+    {"id": 4, "level": 1, "pts": 100, "name": "Dejar cubo", "critical": False, "end_level": True,
      # ("ref", 0): viene de seguir 50 cm de línea recta hacia el este por la rampa (o se colocó
      # mirando al este al reiniciar aquí); es la mejor referencia de rumbo para el pasillo.
      "steps": [("ref", 0), ("jturn", -90), ("line", ("junction", 1, "any"), "v_slow", 8),
@@ -181,8 +186,9 @@ MISSIONS = [
                ("claw", "claw_open"), ("arm", "h_carry"), ("retreat",),
                ("straight", -L2_BACK_CM, "v_slow"), ("head", 90)]},
     {"id": 5, "level": 2, "pts": 100, "name": "Zona obstaculos", "critical": True,
-     # reintento con la misión 4 ya hecha: colocado en la T mirando al este, girar al sur
-     "steps": [("if_skipped", 4, [("ref", 0), ("jturn", 90)]),
+     # recién colocado en la zona amarilla (reinicio o arranque en el nivel 2): sondas sobre la
+     # T mirando al este, girar al sur hacia el pasillo
+     "steps": [("if_placed", [("ref", 0), ("jturn", 90)]),
                ("line", ("end",), "v_slow", 15)] + CORRIDOR},
     {"id": 6, "level": 2, "pts": 100, "name": "Subir nivel 3", "critical": True, "end_level": True,
      # sigue la línea por la rampa blanca hasta salir de la zona azul (ya completamente dentro)

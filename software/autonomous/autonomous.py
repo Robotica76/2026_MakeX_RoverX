@@ -22,6 +22,7 @@ run_level = 1            # nivel en el que arrancó el autónomo (o el del últi
 current_level = 1        # nivel de la misión en curso
 pass_skipped = set()     # misiones saltadas en la pasada actual (ya hechas antes de un reinicio)
 pass_ran = set()         # misiones corridas en la pasada actual
+placed = True            # el robot recién fue colocado a mano (arranque o reinicio)
 
 
 def reset_state():
@@ -281,6 +282,13 @@ def run_step(step):
         if acc[1] > 0:
             heading_ref = step[1] - acc[0] / acc[1]
         return ok
+    if kind == "if_placed":
+        if not placed:
+            return True
+        for sub in step[1]:
+            if not run_step(sub):
+                return False
+        return True
     if kind in ("if_skipped", "if_ran"):
         # ("if_skipped", id, [pasos]): la misión id se saltó en esta pasada (ya estaba hecha y el
         # robot fue recolocado): pasos para llegar a donde ella lo habría dejado.
@@ -349,7 +357,7 @@ def wait_restart(level):
     """Estrategia de reinicios: el robot se detiene y pide reinicio en la zona de inicio de
     `level`. El equipo lo coloca en la zona (con el rumbo de inicio de ese nivel) y presiona A.
     B o RESTART_WAIT_S sin respuesta terminan el autónomo. Devuelve True si se debe seguir."""
-    global run_level, heading_ref
+    global run_level, heading_ref, placed
     hal.stop()
     hal.show("REINICIO nivel %d" % level, line=0)
     hal.show("A = seguir  B = fin", line=1)
@@ -365,6 +373,7 @@ def wait_restart(level):
             hal.reset_heading()             # colocado con el rumbo de inicio del nivel
             heading_ref = 0
             run_level = level
+            placed = True
             lf.reset()
             lf.last_junction = None
             lf.last_edge = None
@@ -388,8 +397,9 @@ def run(start_level=1, budget_s=None, t_start=None, skip=None):
     if t_start is None:
         t_start = hal.now()
     reset_state()
-    global run_level
+    global run_level, placed
     run_level = start_level
+    placed = True
     points = 0
     done = set(skip or ())
     level = start_level
@@ -411,6 +421,7 @@ def run(start_level=1, budget_s=None, t_start=None, skip=None):
             global current_level
             current_level = m["level"]
             ok = run_mission(m)
+            placed = False
             results.append((m["id"], ok))
             hal.stop()
             if ok:
