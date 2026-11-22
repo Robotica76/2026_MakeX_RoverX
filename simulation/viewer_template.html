@@ -70,6 +70,11 @@
     </div>
     <div class="legend">Vista superior. Gris más oscuro = nivel más alto. Rastro azul = recorrido.
       Puntos al frente = sondas del Quad RGB. Rectángulo naranja = garra (con su altura).</div>
+    <h2 style="margin-top:14px">Vista lateral (sigue al robot, escala real)</h2>
+    <canvas id="side" width="1200" height="500"></canvas>
+    <div class="legend">Perfil del piso bajo el recorrido: rampas, escalera y niveles a escala 1:1. El robot se
+      inclina con el pitch que lee el CyberPi; el punto naranja es la garra a su altura. Abajo, la altura
+      del robot durante toda la corrida.</div>
   </section>
   <aside class="card">
     <h2>Estado</h2>
@@ -140,11 +145,31 @@ function text(t, x, y, size, color, align) {
 function drawArena() {
   const shade = { 1: "#eceef0", 2: "#dfe2e6", 3: "#d2d6db", 4: "#c4c9cf" };
   for (const k of ["1", "2", "3", "4"]) rect(A.levels[k], shade[k]);
-  rect(A.ramps[0], "#a9adb3"); rect(A.ramps[1], "#fbfbfb", "#888");
+  // rampas: degradado del nivel bajo al alto, con flecha "sube"
+  const ramp = (r, x0, y0, x1, y1, c0, c1, label) => {
+    const [a, b] = T(x0, y0), [c, d] = T(x1, y1);
+    const g = cx.createLinearGradient(a, b, c, d);
+    g.addColorStop(0, c0); g.addColorStop(1, c1);
+    rect(r, g, "#666", 1);
+    cx.strokeStyle = "#333"; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(a, b); cx.lineTo(c, d); cx.stroke();
+    const ang = Math.atan2(d - b, c - a);
+    cx.beginPath(); cx.moveTo(c, d);
+    cx.lineTo(c - 10 * Math.cos(ang - 0.4), d - 10 * Math.sin(ang - 0.4));
+    cx.lineTo(c - 10 * Math.cos(ang + 0.4), d - 10 * Math.sin(ang + 0.4)); cx.closePath();
+    cx.fillStyle = "#333"; cx.fill();
+    text(label, (r[0] + r[2]) / 2, (r[1] + r[3]) / 2 + 3, 11, "#222", "center");
+  };
+  const r1 = A.ramps[0], r2 = A.ramps[1], st = A.stairs;
+  const deg = (dz, run) => Math.round(Math.atan2(dz, run) * 180 / Math.PI);
+  ramp(r1, r1[0] + 3, (r1[1] + r1[3]) / 2 - 8, r1[2] - 3, (r1[1] + r1[3]) / 2 - 8, "#d9dbde", "#8e939a",
+       `rampa ${deg(A.z["2"] - A.z["1"], r1[2] - r1[0])}°`);
+  ramp(r2, (r2[0] + r2[2]) / 2 + 9, r2[3] - 3, (r2[0] + r2[2]) / 2 + 9, r2[1] + 3, "#ffffff", "#c9ced6",
+       `rampa ${deg(A.z["3"] - A.z["2"], r2[3] - r2[1])}°`);
   for (const k of ["1", "2", "3", "4"]) {
     const r = A.levels[k];
     text(`Nivel ${k} · ${A.z[k]} cm`, r[0] + 1.5, r[3] - 3.5, 12 * K / 4.6, "#6a7380");
   }
+  text(`escalera ${deg(A.z["4"] - A.z["3"], st[2] - st[0])}° · sube ←`, (st[0] + st[2]) / 2, st[3] + 2, 11, "#222", "center");
   // escalera: dos tramos con sus peldaños
   for (const f of A.flights) {
     rect(f, "#b9bfd8", "#555");
@@ -203,7 +228,10 @@ function drawFrame() {
   poly(rpoly(pr[0], pr[1], 0, 2 * ph, 2 * ph), pr[2] ? "rgba(232,196,0,.35)" : COL.yellow, "#6b5a00", 1.5);
   // robot
   const [x, y, yaw] = [f[1], f[2], f[3]];
-  poly(rpoly(x, y, yaw, R.track_len, R.robot_w), "rgba(79,195,247,.75)", "#0b4f6c", 1.5);
+  const tilt = Math.min(1, Math.abs(f[5]) / 30);
+  poly(rpoly(x, y, yaw, R.track_len, R.robot_w),
+       `rgba(${Math.round(79 + 176 * tilt)},${Math.round(195 - 60 * tilt)},${Math.round(247 - 200 * tilt)},.8)`, "#0b4f6c", 1.5);
+  if (Math.abs(f[5]) > 2) text(`${f[5] > 0 ? "▲" : "▼"} ${Math.abs(f[5]).toFixed(0)}°`, x, y + R.robot_w / 2 + 2, 12, "#7a3b00", "center");
   const off = (R.robot_w - R.belt_w) / 2;
   for (const s of [-1, 1]) poly(rpoly(x, y, yaw, R.track_len, R.belt_w, 0, s * off), "#2a2f36");
   // frente y centro de giro
@@ -229,11 +257,83 @@ function drawFrame() {
   cx.beginPath(); cx.arc(bx, by, 1.5 * K, 0, 7); cx.fill(); cx.stroke();
 }
 
+// ------------------------------------------------------------ vista lateral
+const sv = document.getElementById("side"), sx = sv.getContext("2d");
+const DIST = [0];                    // distancia recorrida (cm) en cada cuadro
+for (let k = 1; k < F.length; k++)
+  DIST.push(DIST[k - 1] + Math.hypot(F[k][1] - F[k - 1][1], F[k][2] - F[k - 1][2]));
+const ZMAX = Math.max(...Object.values(A.z)) + 25;
+function drawSide() {
+  const W = sv.width, H = sv.height;
+  const css = getComputedStyle(document.body);
+  sx.clearRect(0, 0, W, H);
+  sx.fillStyle = "#e9edf2"; sx.fillRect(0, 0, W, H);
+  if (!F.length) return;
+  const f = F[i], d0 = DIST[i];
+  const chartH = 60, topH = H - chartH - 8;
+  const win = 120;                                   // cm visibles a lo ancho
+  const k = W / win;                                 // px por cm (misma escala en x y z)
+  const zbase = f[4] - (topH / k) * 0.25;            // el robot en el tercio de abajo
+  const X = d => W / 2 + (d - d0) * k, Y = z => topH - 12 - (z - zbase) * k;
+  // niveles de referencia
+  sx.font = "11px sans-serif"; sx.textAlign = "left";
+  for (const [lv, z] of Object.entries(A.z)) {
+    const y = Y(z); if (y < 0 || y > topH) continue;
+    sx.strokeStyle = "rgba(0,0,0,.12)"; sx.setLineDash([4, 4]); sx.beginPath(); sx.moveTo(0, y); sx.lineTo(W, y); sx.stroke();
+    sx.setLineDash([]); sx.fillStyle = "#6a7380"; sx.fillText(`nivel ${lv} · ${z} cm`, 6, y - 3);
+  }
+  // perfil del piso bajo el recorrido (altura del centro del robot en cada cuadro)
+  sx.beginPath(); let started = false;
+  for (let j = 0; j < F.length; j++) {
+    const px = X(DIST[j]); if (px < -20 || px > W + 20) continue;
+    const py = Y(F[j][4]);
+    started ? sx.lineTo(px, py) : (sx.moveTo(px, py), started = true);
+  }
+  if (started) {
+    sx.lineTo(X(DIST[Math.min(F.length - 1, i + 400)]) + 40, topH); sx.lineTo(-40, topH);
+    sx.lineTo(-40, Y(F[Math.max(0, i - 400)][4]));
+  }
+  sx.closePath(); sx.fillStyle = "#b9c0c9"; sx.fill();
+  sx.strokeStyle = "#555"; sx.lineWidth = 2; sx.stroke();
+  // robot inclinado: orugas (track_len x 5 cm) + cuerpo + brazo + garra
+  const p = f[5] * Math.PI / 180, L = R.track_len;
+  sx.save(); sx.translate(X(d0), Y(f[4])); sx.rotate(-p);
+  sx.fillStyle = "#2a2f36"; sx.fillRect(-L / 2 * k, -5 * k, L * k, 5 * k);            // oruga
+  sx.fillStyle = "rgba(79,195,247,.9)"; sx.fillRect(-L / 2 * k * 0.8, -11 * k, L * k * 0.6, 6 * k);  // caja mBot2
+  const reach = Math.hypot(f[13][0] - f[1], f[13][1] - f[2]);
+  const cxp = reach * k, cyp = -f[6] * k;
+  sx.strokeStyle = "#2266cc"; sx.lineWidth = 3; sx.beginPath();
+  sx.moveTo(0, -10 * k); sx.lineTo(cxp, cyp); sx.stroke();                           // brazo
+  sx.fillStyle = f[7] ? "#ff8c00" : "rgba(255,140,0,.5)";
+  sx.beginPath(); sx.arc(cxp, cyp, 1.6 * k, 0, 7); sx.fill();                          // garra
+  sx.fillStyle = "#0b4f6c"; sx.beginPath(); sx.arc(0, 0, 3, 0, 7); sx.fill();          // centro de giro
+  sx.restore();
+  sx.fillStyle = "#1d2330"; sx.textAlign = "right"; sx.font = "13px sans-serif";
+  sx.fillText(`altura ${f[4].toFixed(1)} cm · pitch ${f[5].toFixed(1)}° · garra a ${f[6].toFixed(1)} cm`, W - 8, 18);
+  // gráfica de altura en el tiempo
+  const y0 = H - 6, tEnd = F[F.length - 1][0] || 1;
+  sx.fillStyle = "#fff"; sx.fillRect(0, H - chartH - 4, W, chartH + 4);
+  sx.strokeStyle = "#2266cc"; sx.lineWidth = 1.5; sx.beginPath();
+  F.forEach((q, j) => { const xx = q[0] / tEnd * W, yy = y0 - q[4] / ZMAX * chartH; j ? sx.lineTo(xx, yy) : sx.moveTo(xx, yy); });
+  sx.stroke();
+  const cx_ = f[0] / tEnd * W;
+  sx.strokeStyle = "#c62828"; sx.beginPath(); sx.moveTo(cx_, H - chartH - 4); sx.lineTo(cx_, H); sx.stroke();
+  sx.fillStyle = "#6a7380"; sx.textAlign = "left"; sx.font = "11px sans-serif";
+  sx.fillText("altura vs. tiempo", 6, H - chartH + 8);
+}
+sv.addEventListener("click", e => {
+  const r = sv.getBoundingClientRect();
+  if (e.clientY - r.top > r.height - 66 * r.height / sv.height) {
+    seekTime((e.clientX - r.left) / r.width * F[F.length - 1][0]);
+  }
+});
+
 function draw() {
   V = view(); K = cv.width / V.w;
   cx.clearRect(0, 0, cv.width, cv.height);
   drawArena();
   if (F.length) drawFrame();
+  drawSide();
   updatePanel();
 }
 
@@ -310,7 +410,8 @@ document.addEventListener("keydown", e => {
 });
 function fit() {
   const w = cv.clientWidth * (window.devicePixelRatio || 1);
-  cv.width = w; cv.height = w * (A.h + 4) / (A.w + 4); draw();
+  cv.width = w; cv.height = w * (A.h + 4) / (A.w + 4);
+  sv.width = w; sv.height = Math.round(w * 0.42); draw();
 }
 window.addEventListener("resize", fit);
 fit();

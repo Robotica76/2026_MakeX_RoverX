@@ -15,8 +15,10 @@ python3 simulation/run_auto.py --line-w 1.0            # línea de 10 mm (mínim
 
 Solo usa la biblioteca estándar de Python. Cada corrida escribe `build/sim/rover_sim.html`: una
 reproducción con la pista, el robot, sus sondas, la garra, el rastro, los eventos y la tabla
-**juez vs. programa**. Clic en un evento o en una misión lleva a ese momento; barra
-espaciadora = reproducir.
+**juez vs. programa**, más una **vista lateral** que sigue al robot a escala real (perfil del
+piso con rampas y escalera, robot inclinado con su pitch, brazo y garra a su altura) y la
+altura del robot en el tiempo. Clic en un evento, en una misión o en la gráfica de altura
+lleva a ese momento; barra espaciadora = reproducir.
 
 ## Cómo funciona
 
