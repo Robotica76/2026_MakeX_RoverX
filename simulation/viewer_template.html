@@ -57,6 +57,34 @@
 </header>
 <main>
   <section class="card">
+    <div id="live" style="display:none;margin-bottom:10px">
+      <div class="controls" style="margin-top:0;align-items:stretch">
+        <div style="display:grid;grid-template-columns:repeat(3,38px);gap:3px" title="joystick del CyberPi">
+          <span></span><button data-k="up">↑</button><span></span>
+          <button data-k="left">←</button><button data-k="middle">●</button><button data-k="right">→</button>
+          <span></span><button data-k="down">↓</button><span></span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button data-k="b" style="font-weight:700">B · arrancar</button>
+          <button data-k="a">A · abortar / manual</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button id="lplace" style="font-weight:700">Colocar en la zona</button>
+          <button id="lpause">Pausa</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label>velocidad <select id="lspeed"><option>0.5</option><option selected>1</option><option>2</option><option>4</option><option>8</option></select></label>
+          <span>
+            <select id="nlevel"><option value="1">nivel 1</option><option value="2">nivel 2</option><option value="3">nivel 3</option><option value="4">nivel 4</option></select>
+            <input id="nseed" type="number" value="0" style="width:52px" title="semilla">
+            <select id="nnoise"><option value="0">sin ruido</option><option value="1">con ruido</option></select>
+            <button id="lnew">Nueva corrida</button>
+          </span>
+        </div>
+      </div>
+      <div id="lcyber" style="margin-top:8px;font:13px ui-monospace,Menlo,monospace;background:#0e1116;color:#9fe7a4;border-radius:6px;padding:6px 10px;white-space:pre"></div>
+      <div id="lstate" class="legend"></div>
+    </div>
     <canvas id="cv" width="1200" height="620"></canvas>
     <div class="controls">
       <button id="play">▶ Reproducir</button>
@@ -272,9 +300,12 @@ function drawFrame() {
 
 // ------------------------------------------------------------ vista lateral
 const sv = document.getElementById("side"), sx = sv.getContext("2d");
-const DIST = [0];                    // distancia recorrida (cm) en cada cuadro
-for (let k = 1; k < F.length; k++)
-  DIST.push(DIST[k - 1] + Math.hypot(F[k][1] - F[k - 1][1], F[k][2] - F[k - 1][2]));
+const DIST = [];                     // distancia recorrida (cm) en cada cuadro
+function extendDist() {
+  for (let k = DIST.length; k < F.length; k++)
+    DIST.push(k ? DIST[k - 1] + Math.hypot(F[k][1] - F[k - 1][1], F[k][2] - F[k - 1][2]) : 0);
+}
+extendDist();
 const ZMAX = Math.max(...Object.values(A.z)) + 25;
 function drawSide() {
   const W = sv.width, H = sv.height;
@@ -353,15 +384,18 @@ function draw() {
 
 // ------------------------------------------------------------ panel
 const ev = document.getElementById("events");
-D.events.forEach(([t, e], k) => {
-  const d = document.createElement("div");
-  d.textContent = `${t.toFixed(1).padStart(6)} s  ${e}`;
-  if (e.startsWith("JUEZ")) d.className = "judge";
-  if (e.startsWith("CAIDA") || e.startsWith("ERROR")) d.className = "fall";
-  d.dataset.t = t;
-  d.onclick = () => { seekTime(t); };
-  ev.appendChild(d);
-});
+function addEvents(list) {
+  list.forEach(([t, e]) => {
+    const d = document.createElement("div");
+    d.textContent = `${t.toFixed(1).padStart(6)} s  ${e}`;
+    if (e.startsWith("JUEZ")) d.className = "judge";
+    if (e.startsWith("CAIDA") || e.startsWith("ERROR")) d.className = "fall";
+    d.dataset.t = t;
+    d.onclick = () => { seekTime(t); };
+    ev.appendChild(d);
+  });
+}
+addEvents(D.events);
 function seekTime(t) {
   let k = F.findIndex(f => f[0] >= t); if (k < 0) k = F.length - 1;
   i = k; slider.value = i; draw();
@@ -380,18 +414,22 @@ function updatePanel() {
 }
 const rep = D.report, names = Object.fromEntries(D.missions.map(m => [m.id, m.name]));
 const tb = document.querySelector("#results tbody");
-for (const m of rep.missions) {
-  const pg = rep.program[m.id];
+function renderResults(missions, program, total, est) {
+  tb.innerHTML = "";
+  for (const m of missions) {
+    const pg = program[m.id];
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${m.id}</td><td>${names[m.id]}</td>` +
+      `<td class="${pg === undefined ? "" : pg ? "ok" : "bad"}">${pg === undefined ? "-" : pg ? "OK" : "falla"}</td>` +
+      `<td class="${m.ok ? "ok" : "bad"}">${m.ok ? "OK" : "no"}</td><td class="num">${m.pts}</td>`;
+    if (m.t != null) tr.style.cursor = "pointer", tr.onclick = () => seekTime(m.t);
+    tb.appendChild(tr);
+  }
   const tr = document.createElement("tr");
-  tr.innerHTML = `<td>${m.id}</td><td>${names[m.id]}</td>` +
-    `<td class="${pg === undefined ? "" : pg ? "ok" : "bad"}">${pg === undefined ? "-" : pg ? "OK" : "falla"}</td>` +
-    `<td class="${m.ok ? "ok" : "bad"}">${m.ok ? "OK" : "no"}</td><td class="num">${m.pts}</td>`;
-  if (m.t != null) tr.style.cursor = "pointer", tr.onclick = () => seekTime(m.t);
+  tr.innerHTML = `<th colspan="4">Total juez${est == null ? "" : ` (el programa estima ${est})`}</th><th class="num">${total}</th>`;
   tb.appendChild(tr);
 }
-const tr = document.createElement("tr");
-tr.innerHTML = `<th colspan="4">Total juez (el programa estima ${rep.program_points})</th><th class="num">${rep.total}</th>`;
-tb.appendChild(tr);
+renderResults(rep.missions, rep.program, rep.total, rep.program_points);
 const notes = document.getElementById("notes");
 for (const n of rep.notes.concat(rep.warnings).concat(rep.error ? ["Error del programa (ver eventos)"] : [])) {
   const li = document.createElement("li"); li.textContent = n; notes.appendChild(li);
@@ -429,6 +467,49 @@ function fit() {
 }
 window.addEventListener("resize", fit);
 fit();
+
+// ------------------------------------------------------------ simulador EN VIVO (simulation/live.py)
+if (D.live) {
+  document.getElementById("live").style.display = "block";
+  document.getElementById("play").style.display = "none";
+  document.getElementById("speed").style.display = "none";
+  const post = (u) => fetch(u, { method: "POST" });
+  document.querySelectorAll("#live button[data-k]").forEach(b => b.onclick = () => post("/btn?k=" + b.dataset.k));
+  document.getElementById("lplace").onclick = () => post("/place");
+  document.getElementById("lpause").onclick = () => post("/pause");
+  document.getElementById("lspeed").onchange = e => post("/speed?v=" + e.target.value);
+  document.getElementById("lnew").onclick = () => {
+    const q = `level=${nlevel.value}&seed=${nseed.value}&noise=${nnoise.value}`;
+    post("/new?" + q).then(() => location.reload());
+  };
+  nlevel.value = D.params.level; nseed.value = D.params.seed; nnoise.value = D.params.noise ? 1 : 0;
+  let nev = 0, busy = false;
+  async function poll() {
+    if (busy) return; busy = true;
+    try {
+      const r = await fetch(`/state?f=${F.length}&e=${nev}`);
+      const st = await r.json();
+      const atEnd = i >= F.length - 1;
+      for (const f of st.frames) F.push(f);
+      extendDist();
+      addEvents(st.events); nev += st.events.length;
+      if (st.events.length) ev.scrollTop = ev.scrollHeight;
+      slider.max = Math.max(0, F.length - 1);
+      if (atEnd && F.length) { i = F.length - 1; slider.value = i; }
+      const total = st.judge.reduce((a, m) => a + m.pts, 0);
+      renderResults(st.judge, st.program, total, null);
+      const S = st.status;
+      document.getElementById("lcyber").textContent = "CyberPi │ " + S.screen.filter(x => x).join("\n        │ ");
+      document.getElementById("lstate").textContent =
+        `t ${S.t} s · ${S.paused ? "EN PAUSA · " : ""}velocidad ${S.speed}× · reinicios ${S.restarts} · caídas ${S.falls}` +
+        (S.state ? " · " + S.state : "");
+      document.getElementById("lpause").textContent = S.paused ? "Seguir" : "Pausa";
+      if (st.frames.length) draw();
+    } catch (e) { document.getElementById("lstate").textContent = "Sin conexión con simulation/live.py"; }
+    busy = false;
+  }
+  setInterval(poll, 100);
+}
 </script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>

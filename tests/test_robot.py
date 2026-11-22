@@ -313,7 +313,7 @@ def test_runner_continues_after_non_critical_failure(monkeypatch):
 
 
 def test_abort_button_stops_runner(monkeypatch):
-    monkeypatch.setattr(auto, "run_mission", lambda m: world.pressed.add("b") or True)
+    monkeypatch.setattr(auto, "run_mission", lambda m: world.pressed.add(cfg.ABORT_BUTTON) or True)
     auto.run(start_level=1)
     assert len(auto.results) == 1
 
@@ -442,3 +442,33 @@ def test_odometer_ignores_turns_in_place(sim):
     sim.em = [-50.0, 50.0]          # atrás
     sim.advance(1.0)
     assert hal.odo_abs() == pytest.approx(0.0, abs=1e-6)
+
+
+# ---------------------------------------------------------------- programa por tramos
+def test_segment_stops_after_cube_is_placed(monkeypatch):
+    """Tramo 1 = misiones 1 a 4 (el cubo queda en el pedestal 2); luego se elige el nivel 2."""
+    monkeypatch.setattr(auto, "run_mission", lambda m: True)
+    auto.run(start_level=1)
+    assert [mid for mid, _ in auto.results] == [1, 2, 3, 4]
+    assert auto.next_level == 2
+
+
+def test_segment_retry_reruns_navigation_but_skips_manipulation(monkeypatch):
+    ran = []
+    monkeypatch.setattr(auto, "run_mission", lambda m: ran.append(m["id"]) or True)
+    auto.run(start_level=3, skip={7, 9})      # 7 manipulación (se salta), 9 navegación (se repite)
+    assert ran[:2] == [9, 10]
+
+
+def test_choose_level_with_joystick_and_start(monkeypatch):
+    script = iter([set(), {"down"}, set(), {"left"}, set(), {cfg.START_BUTTON}, set()])
+    state = {"now": set()}
+
+    def button(name):
+        return name in state["now"]
+
+    def wait(s):
+        state["now"] = next(script, set())
+    monkeypatch.setattr(hal, "button", button)
+    monkeypatch.setattr(hal, "wait", wait)
+    assert auto.choose_level(1) == 3

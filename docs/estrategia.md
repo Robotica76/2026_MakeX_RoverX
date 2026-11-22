@@ -14,15 +14,24 @@ pista**. Los giros, distancias y conteos se ajustan ahí, sin tocar la lógica.
 | 3 (antes) | Zona azul | Curva en S con el prisma sobre la línea: empujarlo hasta la marca roja y rodearlo. Pedestal de la pelota a un lado. Escalera | `line … color red` a velocidad de empuje, `detour`, `approach_obj` (pelota), `stairs` |
 | 4 | Zona verde | Torre fija sobre la línea: rodearla. Tarjetas de color junto a la barra: leerlas y recordar la roja. Regresar a la casilla roja y dejar la pelota. Seguir hasta la X azul y parar | `leave green` + `to_tower` (distancia desde la zona), `detour`, `cards`, `drop_red`, `stop_in blue` |
 
-## Estrategia de reinicios
+## Programa por tramos y reinicios
 
-El robot va de zona de inicio en zona de inicio: al completar un nivel (misiones 3 y 6) se
-detiene, muestra **REINICIO nivel N** y espera **A**. El equipo pide el reinicio, lo coloca en la
-zona de color con el rumbo de inicio de ese nivel y presiona A; el robot toma de nuevo su
-referencia de rumbo. Así la condición con la que terminó un nivel no interfiere con el
-siguiente. Si falla una misión crítica también pide reinicio en la zona del nivel actual y repite
-la navegación (las misiones de manipulación ya logradas se saltan). Los niveles 3 y 4 van
-seguidos: el robot no cabe completo entre la escalera y la torre.
+Como lo usaba el equipo: en la pantalla de inicio del CyberPi el **joystick elige el nivel**
+(↑ 1, ↓ 2, ← 3, → 4; `cfg.LEVEL_KEYS`) y **B (play) arranca** el tramo de ese nivel
+(`cfg.START_BUTTON`; A aborta durante el autónomo, A en la pantalla de inicio = control manual,
+centro del joystick = ajustes). El robot **se detiene al terminar el tramo** y vuelve a la
+pantalla con el siguiente nivel ya elegido: el equipo pide reinicio, lo coloca en la zona de
+color y presiona B. Así la condición con la que terminó un nivel no interfiere con el siguiente.
+
+| Tramo | Arranca en | Misiones | Termina |
+| --- | --- | --- | --- |
+| 1 | X roja | 1, 2, 3, 4 | con el cubo en el pedestal del nivel 2 (reiniciar en amarillo con el cubo en la garra hace que se lo quiten) |
+| 2 | Zona amarilla | 5, 6 | completamente dentro del nivel 3 |
+| 3 | Zona azul | 7, 9, 10, 11, 13 | en la meta (el robot no cabe entre la escalera y la torre: los niveles 3 y 4 van seguidos) |
+| 4 | Zona verde | 10, 11, 13 | en la meta (para reintentar el nivel 4) |
+
+Si un tramo falla, se repite: las misiones de navegación se vuelven a correr y las de
+manipulación ya logradas en ese encendido se saltan.
 
 ## Decisiones
 

@@ -87,23 +87,44 @@ class Referee:
             self.shown.append(lab.strip().lower())
 
     # ------------------------------------------------------------ al terminar
-    def final(self):
+    def end_state(self):
+        """Misiones que se juzgan por cómo QUEDAN las cosas (cubo, prisma, pelota, meta)."""
         s = self.sim
         a = s.arena
+        ids = set()
         if s.objects["cube"]["on"] == "pedestal2" and not s.objects["cube"]["held"]:
-            self._latch(4)
+            ids.add(4)
         pr = s.prism
         if not pr["lost"]:
             h = pr["half"]
             d = a.dotted
             if pr["x"] + h > d[0] and pr["x"] - h < d[2] and pr["y"] + h > d[1] and pr["y"] - h < d[3]:
-                self._latch(7)
+                ids.add(7)
         red = [i for i, (_, c) in enumerate(a.cards) if c == "red"]
         if red and s.objects["ball"]["on"] == "hole%d" % red[0]:
-            self._latch(12)
+            ids.add(12)
         goal = a.zones[4][1]
         if self._stopped() and not s.fallen and all(ar.inside(goal, x, y) for x, y in s.footprint()):
-            self._latch(13)
+            ids.add(13)
+        return ids
+
+    def snapshot(self):
+        """Estado del juez sin cerrar la corrida (para el simulador en vivo)."""
+        ok = set(self.done) | self.end_state()
+        cards = set(self.sim.arena.card_colors)
+        seen = set(c for c in self.shown if c in cards)
+        out = []
+        for mid in sorted(self.pts):
+            good = (len(seen) > 0) if mid == 11 else (mid in ok)
+            p = 20 * len(seen) if mid == 11 else (self.pts[mid] if good else 0)
+            out.append({"id": mid, "ok": good, "pts": p})
+        return out
+
+    def final(self):
+        s = self.sim
+        a = s.arena
+        for mid in self.end_state():
+            self._latch(mid)
         cards = set(a.card_colors)
         seen = sorted(set(c for c in self.shown if c in cards))
         out = []

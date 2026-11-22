@@ -46,11 +46,11 @@
 #   ("detour", lado)           rodear la torre (-1 izquierda, 1 derecha)
 #   ("cards",) / ("drop_red",) / ("stop_in", color)
 #
-# critical=True: si falla, el robot quedó fuera de ruta: pide reinicio en la zona del nivel
-# (cfg.RESTART_AT_ZONES) o se detiene. critical=False: se sigue con la siguiente misión.
+# critical=True: si falla, el robot quedó fuera de ruta y el tramo se detiene (el equipo pide
+# reinicio en la zona del nivel). critical=False: se sigue con la siguiente misión.
 # end_level=True: termina el tramo (el robot ya está completamente dentro del siguiente nivel y,
-# en el tramo 1, el cubo ya está en el pedestal): con la estrategia de reinicios, el robot se
-# detiene y pide reinicio en la zona de inicio del siguiente nivel.
+# en el tramo 1, el cubo ya está en el pedestal): con cfg.SEGMENTS el robot se detiene ahí; el
+# equipo pide reinicio en la zona del siguiente nivel, lo elige con el joystick y arranca.
 
 # ---- nivel 1 POR COMANDOS (experiencia del equipo: con la línea delgada y las marcas verdes
 # seguir la línea no funcionaba). Cada tramo es "avanza X cm sosteniendo el rumbo Y" con el IMU,

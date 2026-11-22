@@ -252,9 +252,9 @@ def button(name):
 
 
 def abort_requested():
-    """Botón B del CyberPi = abortar el autónomo (para reinicios)."""
+    """Botón de abortar (cfg.ABORT_BUTTON) = detener el autónomo (para pedir reinicio)."""
     global _abort
-    if not _abort and cyberpi.controller.is_press("b"):
+    if not _abort and cyberpi.controller.is_press(cfg.ABORT_BUTTON):
         _abort = True
     return _abort
 

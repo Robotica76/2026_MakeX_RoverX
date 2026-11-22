@@ -184,11 +184,15 @@ SERVO_STEP_S = 0.35
 HOLD_VALID_S = 5.5       # reglamento: sostener >= 5 s
 MATCH_S = 300
 AUTO_BUDGET_S = 300      # PREGUNTA ABIERTA: ¿el autónomo comparte los 5 min con el manual?
-# Estrategia del equipo: llegar a la zona de color de cada nivel y pedir reinicio ahí (el robot se
-# recoloca alineado y el error no pasa de un nivel a otro). También tras una falla crítica.
-RESTART_AT_ZONES = True
-RESTART_WAIT_S = 60      # sin A en este tiempo, el autónomo termina
-MAX_RETRIES = 2          # reintentos del mismo nivel tras fallas críticas
+# Programa por TRAMOS (como lo usa el equipo): en la pantalla de inicio el joystick del CyberPi
+# elige el nivel y el botón de arranque corre el tramo de ese nivel; el robot se detiene al
+# terminarlo (el equipo pide reinicio, lo coloca en la zona del siguiente nivel, lo elige y arranca).
+SEGMENTS = True
+LEVEL_KEYS = {"up": 1, "down": 2, "left": 3, "right": 4}   # TODO confirmar con el equipo
+START_BUTTON = "b"       # "play" (el equipo cree que es B; TODO confirmar)
+ABORT_BUTTON = "a"       # durante el autónomo: abortar (el que no es de arranque)
+MANUAL_BUTTON = "a"      # en la pantalla de inicio: control manual
+MENU_BUTTON = "middle"   # en la pantalla de inicio: centro del joystick = ajustes
 
 # ---------------------------------------------------------------- control manual
 PAD_DEADZONE = 8

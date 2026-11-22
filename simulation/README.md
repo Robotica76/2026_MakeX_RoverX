@@ -14,7 +14,19 @@ python3 simulation/run_auto.py --line-w 1.0            # línea de 10 mm (mínim
 python3 simulation/run_auto.py --ramp-deg 40 --true com_h=11   # rampas de 40° y centro de masa alto
 ```
 
-Solo usa la biblioteca estándar de Python. Cada corrida escribe `build/sim/rover_sim.html`: una
+**Simulador en vivo** (el programa de competencia real, con los botones del CyberPi):
+
+```bash
+python3 simulation/live.py               # abre http://127.0.0.1:8770
+```
+
+Joystick ↑ ↓ ← → elige el nivel en la pantalla de inicio (↑ 1, ↓ 2, ← 3, → 4), **B** arranca el
+tramo, **A** aborta (o manual en la pantalla de inicio), **Colocar en la zona** hace lo del equipo
+al pedir reinicio (si el robot está corriendo, primero lo aborta; si se cayó, lo levanta; si se
+cambia el nivel después, lo mueve a esa zona). También pausa, velocidad y nueva corrida. La
+pantalla del CyberPi se ve arriba de la pista.
+
+Solo usa la biblioteca estándar de Python. Cada corrida de `run_auto.py` escribe `build/sim/rover_sim.html`: una
 reproducción con la pista, el robot, sus sondas, la garra, el rastro, los eventos y la tabla
 **juez vs. programa**, una **vista 3D** (three.js desde un CDN: niveles a su altura, rampas,
 escalera de dos tramos, props, robot con pitch, brazo y garra; cámara libre o siguiendo al
@@ -65,10 +77,12 @@ pasillo y el tope desvían el rumbo al pisarlos.
 
 ## Estrategia que se simula
 
-- **Reinicio en cada zona de inicio** (estrategia del equipo): al completar un nivel el robot pide
-  reinicio en la zona de color del siguiente; el simulador hace de equipo (recoloca con ±0.7 cm
-  y ±1.5° de error, descuenta 15 s, presiona A). Tras una falla crítica o una caída, reinicio en la
-  zona del nivel que jugaba; la primera caída es advertencia y las siguientes restan 20.
+- **Programa por tramos** (como lo usa el equipo): en la pantalla de inicio el joystick elige el
+  nivel y B arranca el tramo; el robot se detiene al terminarlo. El tramo 1 termina con el cubo
+  en el pedestal del nivel 2 (si se reinicia en amarillo con el cubo en la garra, se lo quitan).
+  En `run_auto.py` el simulador hace de equipo: coloca el robot en la zona del siguiente nivel
+  (±0.7 cm, ±1.5°, 15 s), lo elige y arranca; si el tramo falla o el robot se cae, repite ese
+  nivel (hasta 2 veces). La primera caída es advertencia y las siguientes restan 20.
 - **Nivel 1 por comandos** (rectas con rumbo del IMU que terminan en una línea perpendicular).
 - **Nivel 3 por maniobra**: salir de la zona azul, tomar el prisma con la garra, dejarlo en la
   zona punteada por distancias fijas, retroceder y cruzar la línea de la escalera para alinearse.

@@ -23,6 +23,8 @@ current_level = 1        # nivel de la misión en curso
 pass_skipped = set()     # misiones saltadas en la pasada actual (ya hechas antes de un reinicio)
 pass_ran = set()         # misiones corridas en la pasada actual
 placed = True            # el robot recién fue colocado a mano (arranque o reinicio)
+next_level = 1           # nivel que conviene elegir después del tramo
+completed = set()        # misiones logradas en este encendido (se saltan al repetir un tramo)
 
 
 def reset_state():
@@ -353,105 +355,61 @@ def run_mission(m):
     return True
 
 
-def wait_restart(level):
-    """Estrategia de reinicios: el robot se detiene y pide reinicio en la zona de inicio de
-    `level`. El equipo lo coloca en la zona (con el rumbo de inicio de ese nivel) y presiona A.
-    B o RESTART_WAIT_S sin respuesta terminan el autónomo. Devuelve True si se debe seguir."""
-    global run_level, heading_ref, placed
-    hal.stop()
-    hal.show("REINICIO nivel %d" % level, line=0)
-    hal.show("A = seguir  B = fin", line=1)
-    t0 = hal.now()
-    blink = 0
-    while hal.now() - t0 < cfg.RESTART_WAIT_S:
-        if hal.abort_requested():
-            return False
-        if hal.button("a"):
-            while hal.button("a"):          # esperar a que se suelte
-                hal.wait(0.02)
-            hal.wait(0.3)
-            hal.reset_heading()             # colocado con el rumbo de inicio del nivel
-            heading_ref = 0
-            run_level = level
-            placed = True
-            lf.reset()
-            lf.last_junction = None
-            lf.last_edge = None
-            lf._after_turn = False
-            hal.show("Nivel %d" % level, line=0)
-            return True
-        blink += 1
-        hal.leds(0, 0, 120) if (blink // 10) % 2 == 0 else hal.leds(0, 0, 0)
-        hal.wait(0.02)
-    return False
-
-
 def run(start_level=1, budget_s=None, t_start=None, skip=None):
-    """Ejecuta el autónomo. Devuelve los puntos estimados de las misiones logradas.
+    """Corre el TRAMO que empieza en start_level. Devuelve los puntos estimados.
 
-    Con cfg.RESTART_AT_ZONES (estrategia del equipo): al completar un nivel (misión con
-    "end_level") el robot pide reinicio en la zona del siguiente; si falla una misión crítica,
-    pide reinicio en la zona del nivel actual y reintenta lo que falta (hasta MAX_RETRIES)."""
+    Con cfg.SEGMENTS el robot se detiene al terminar el tramo (misión con "end_level") o al
+    fallar una misión crítica; next_level queda con el nivel que conviene elegir después.
+    skip: misiones ya logradas en este encendido; solo se saltan las de manipulación (las de
+    navegación, críticas, se repiten porque llevan al robot a donde empieza la siguiente)."""
+    global run_level, placed, next_level, current_level
     if budget_s is None:
         budget_s = cfg.AUTO_BUDGET_S
     if t_start is None:
         t_start = hal.now()
     reset_state()
-    global run_level, placed
     run_level = start_level
+    next_level = start_level
     placed = True
+    crit = {}
+    for m in ms.MISSIONS:
+        crit[m["id"]] = m["critical"]
+    done = set()
+    for mid in (skip or ()):
+        if not crit.get(mid, True):
+            done.add(mid)
     points = 0
-    done = set(skip or ())
-    level = start_level
-    retries = 0
-    while True:
-        restart = None
-        pass_skipped.clear()
-        pass_ran.clear()
-        for m in ms.MISSIONS:
-            if m["level"] < level:
-                continue
-            if m["id"] in done:
-                pass_skipped.add(m["id"])
-                continue
-            pass_ran.add(m["id"])
-            if hal.now() - t_start >= budget_s or hal.abort_requested():
-                restart = None
+    pass_skipped.clear()
+    pass_ran.clear()
+    for m in ms.MISSIONS:
+        if m["level"] < start_level:
+            continue
+        if m["id"] in done:
+            pass_skipped.add(m["id"])
+            continue
+        if hal.now() - t_start >= budget_s or hal.abort_requested():
+            break
+        pass_ran.add(m["id"])
+        current_level = m["level"]
+        ok = run_mission(m)
+        placed = False
+        results.append((m["id"], ok))
+        hal.stop()
+        if ok:
+            done.add(m["id"])
+            completed.add(m["id"])
+            points += m["pts"]
+            hal.leds(0, 80, 0)
+            hal.show("Pts aprox: %d" % points, line=2)
+            if m.get("end_level") and cfg.SEGMENTS:
+                next_level = m["level"] + 1
                 break
-            global current_level
-            current_level = m["level"]
-            ok = run_mission(m)
-            placed = False
-            results.append((m["id"], ok))
-            hal.stop()
-            if ok:
-                done.add(m["id"])
-                points += m["pts"]
-                hal.leds(0, 80, 0)
-                hal.show("Pts aprox: %d" % points, line=2)
-                if m.get("end_level") and cfg.RESTART_AT_ZONES:
-                    restart = m["level"] + 1
-                    retries = 0
-                    break
-            else:
-                hal.leds(80, 0, 0)
-                if hal.abort_requested():
-                    break
-                if m["critical"]:
-                    if cfg.RESTART_AT_ZONES and retries < cfg.MAX_RETRIES:
-                        restart = m["level"]
-                        retries += 1
-                        # al reintentar el nivel se repite la navegación (misiones críticas);
-                        # solo se saltan las de manipulación ya logradas
-                        for mm in ms.MISSIONS:
-                            if mm["level"] == restart and mm["critical"]:
-                                done.discard(mm["id"])
-                    break
-        if restart is None:
-            break
-        if hal.now() - t_start >= budget_s or not wait_restart(restart):
-            break
-        level = restart
+            if m is ms.MISSIONS[-1]:
+                next_level = 5              # terminó todo: la pantalla vuelve a leer la zona
+        else:
+            hal.leds(80, 0, 0)
+            if hal.abort_requested() or m["critical"]:
+                break
     hal.stop()
     return points
 
@@ -466,23 +424,28 @@ def detect_level():
     return 1
 
 
-def choose_level():
-    """Pantalla de inicio. Arriba/abajo: nivel. A: arrancar. Derecha: menú de ajustes.
-    Devuelve el nivel elegido, o 0 si se pidió el menú de ajustes."""
-    level = detect_level()
+def choose_level(level=None):
+    """Pantalla de inicio. Joystick: elige el nivel (cfg.LEVEL_KEYS: arriba 1, abajo 2,
+    izquierda 3, derecha 4). START_BUTTON: arrancar el tramo. MANUAL_BUTTON: control manual.
+    Centro del joystick: menú de ajustes. Devuelve el nivel, 0 = ajustes, -1 = manual."""
+    if level is None:
+        level = detect_level()
     hal.wait(0.3)
     while True:
-        hal.show("Rover X - nivel %d" % level, line=0)
-        hal.show("Arr/Abj nivel  A=GO", line=1)
-        hal.show("Der = ajustes", line=2)
-        if hal.button("up"):
-            level = level % 4 + 1
-            hal.wait(0.25)
-        elif hal.button("down"):
-            level = (level - 2) % 4 + 1
-            hal.wait(0.25)
-        elif hal.button("right"):
-            return 0
-        elif hal.button("a"):
+        hal.show("Nivel %d" % level, line=0)
+        hal.show("^1 v2 <3 >4  %s=GO" % cfg.START_BUTTON.upper(), line=1)
+        hal.show("%s=manual  centro=ajustes" % cfg.MANUAL_BUTTON.upper(), line=2)
+        for key in cfg.LEVEL_KEYS:
+            if hal.button(key):
+                level = cfg.LEVEL_KEYS[key]
+        if hal.button(cfg.START_BUTTON):
+            while hal.button(cfg.START_BUTTON):     # que no cuente como otro botón al soltarlo
+                hal.wait(0.02)
             return level
+        if hal.button(cfg.MENU_BUTTON):
+            return 0
+        if hal.button(cfg.MANUAL_BUTTON):
+            while hal.button(cfg.MANUAL_BUTTON):
+                hal.wait(0.02)
+            return -1
         hal.wait(0.02)

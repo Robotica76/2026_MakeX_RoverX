@@ -71,14 +71,31 @@ def geometry_warnings():
     return out
 
 
+def frame_of(sim, label):
+    """Un cuadro de la reproducción (el visor lee estos índices)."""
+    o = sim.objects
+    h, _ = sim.arm_h()
+    return [
+        round(world.t, 2), round(sim.x, 2), round(sim.y, 2), round(sim.yaw, 1),
+        round(sim.z, 1), round(sim.pitch, 1), round(h, 1), 1 if sim.claw_closed() else 0,
+        list(world.leds),
+        [round(o["cube"]["x"], 1), round(o["cube"]["y"], 1), round(o["cube"]["z"], 1)],
+        [round(o["ball"]["x"], 1), round(o["ball"]["y"], 1), round(o["ball"]["z"], 1)],
+        [round(sim.prism["x"], 1), round(sim.prism["y"], 1), 1 if sim.prism["lost"] else 0],
+        label,
+        [round(v, 1) for v in sim.claw_point()[:2]],
+    ]
+
+
 RESTART_S = 15.0            # s que tarda el equipo en pedir el reinicio y recolocar el robot
+MAX_RETRIES = 2             # reintentos del mismo tramo tras una falla o una caída
 
 
 def run_once(level=1, seed=0, noise=0.0, line_w=2.0, prog=None, true=None, budget=None,
              record=True, ramp_deg=None, restarts=True):
-    """restarts=True: estrategia del equipo (cfg.RESTART_AT_ZONES): al pedir reinicio el
-    simulador recoloca el robot en la zona, descuenta RESTART_S y presiona A; tras una caída lo
-    recoloca en la zona del nivel que jugaba."""
+    """restarts=True: programa por tramos (cfg.SEGMENTS) y el simulador hace de equipo: al
+    terminar un tramo recoloca el robot en la zona del siguiente nivel (RESTART_S), lo elige y
+    arranca; si el tramo falla o el robot se cae, reintenta ese nivel (MAX_RETRIES)."""
     """Una corrida completa. Devuelve un dict con el reporte, el trazo y los eventos."""
     cfg.P.clear()
     cfg.P.update(copy.deepcopy(P0))
@@ -93,43 +110,13 @@ def run_once(level=1, seed=0, noise=0.0, line_w=2.0, prog=None, true=None, budge
     frames = []
     label = {"m": ""}
 
-    team = {"state": None, "t": 0.0}
     sim.restarts = []
     sim.falls = 0
 
-    def team_step():
-        lab = world.labels.get(0, "")
-        if team["state"] is None and lab.startswith("REINICIO"):
-            lvl = int(lab.split()[-1])
-            world.t += RESTART_S
-            sim.place(lvl)
-            sim.restarts.append(lvl)
-            log.append((world.t, "EQUIPO: reinicio en la zona del nivel %d" % lvl))
-            world.pressed.add("a")
-            team["state"], team["t"] = "pressed", world.t
-        elif team["state"] == "pressed" and world.t - team["t"] > 0.15:
-            world.pressed.discard("a")
-            team["state"] = "wait"
-        elif team["state"] == "wait" and not lab.startswith("REINICIO"):
-            team["state"] = None
-
     def on_frame():
         ref.update()            # primero el juez (antes de que el equipo mueva el robot)
-        if restarts:
-            team_step()
         if record:
-            o = sim.objects
-            h, _ = sim.arm_h()
-            frames.append([
-                round(world.t, 2), round(sim.x, 2), round(sim.y, 2), round(sim.yaw, 1),
-                round(sim.z, 1), round(sim.pitch, 1), round(h, 1), 1 if sim.claw_closed() else 0,
-                list(world.leds),
-                [round(o["cube"]["x"], 1), round(o["cube"]["y"], 1), round(o["cube"]["z"], 1)],
-                [round(o["ball"]["x"], 1), round(o["ball"]["y"], 1), round(o["ball"]["z"], 1)],
-                [round(sim.prism["x"], 1), round(sim.prism["y"], 1), 1 if sim.prism["lost"] else 0],
-                label["m"],
-                [round(v, 1) for v in sim.claw_point()[:2]],
-            ])
+            frames.append(frame_of(sim, label["m"]))
 
     sim.on_frame = on_frame
     orig_run_mission = autonomous.run_mission
@@ -143,7 +130,8 @@ def run_once(level=1, seed=0, noise=0.0, line_w=2.0, prog=None, true=None, budge
 
     autonomous.run_mission = run_mission
     orig_sleep = physics.patch_time(sim)
-    cfg.RESTART_AT_ZONES = restarts
+    cfg.SEGMENTS = restarts
+    autonomous.completed.clear()       # encendido nuevo
     all_results = []
     points = 0
     error = None
@@ -159,29 +147,46 @@ def run_once(level=1, seed=0, noise=0.0, line_w=2.0, prog=None, true=None, budge
         t0 = world.t
         bud = cfg.AUTO_BUDGET_S if budget is None else budget
         lvl = level
+        retries = 0
         while True:
+            fell = False
             try:
                 try:
                     points += autonomous.run(lvl, budget_s=bud, t_start=t0,
-                                             skip=[mid for mid, ok in all_results if ok])
+                                             skip=autonomous.completed)
                 finally:
                     all_results.extend(autonomous.results)
-                break
             except physics.Fallen:
                 sim.falls += 1
-                # reinicio en la zona del último nivel subido (según el juez)
+                fell = True
+            # el equipo: tramo terminado -> siguiente nivel; falla o caída -> reintentar
+            # (en la zona del último nivel subido, según el juez)
+            if not restarts:
+                break
+            nxt = autonomous.next_level
+            if fell or nxt == lvl:
                 climbed = sum(1 for mid in (3, 6, 9) if mid in ref.done)
-                lvl = max(autonomous.current_level, 1 + climbed)
-                if not restarts or world.t + RESTART_S - t0 >= bud:
-                    sim.fallen = sim.fallen or "caída"
+                nxt = max(lvl, 1 + climbed)
+                retries += 1
+                if retries > MAX_RETRIES:
                     break
-                world.t += RESTART_S
-                world.pressed.clear()
-                sim.place(lvl)
-                sim.restarts.append(lvl)
-                log.append((world.t, "EQUIPO: reinicio tras caída en la zona del nivel %d" % lvl))
-                hal.clear_abort()
-                hal.reset_heading()
+            else:
+                retries = 0
+            last = ms.MISSIONS[-1]["id"]
+            if nxt > 4 or (not fell and last in [mid for mid, _ in autonomous.results]):
+                break
+            if world.t + RESTART_S - t0 >= bud:
+                break
+            hal.stop()
+            world.t += RESTART_S
+            world.pressed.clear()
+            sim.place(nxt)
+            sim.restarts.append(nxt)
+            log.append((world.t, "EQUIPO: reinicio, coloca en la zona del nivel %d, elige %d y arranca"
+                        % (nxt, nxt)))
+            hal.clear_abort()
+            hal.reset_heading()
+            lvl = nxt
     except Exception as e:     # un error del programa también es un resultado
         import traceback
         error = traceback.format_exc()
