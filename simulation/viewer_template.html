@@ -70,6 +70,18 @@
     </div>
     <div class="legend">Vista superior. Gris más oscuro = nivel más alto. Rastro azul = recorrido.
       Puntos al frente = sondas del Quad RGB. Rectángulo naranja = garra (con su altura).</div>
+    <h2 style="margin-top:14px">Vista 3D</h2>
+    <div id="v3wrap" style="position:relative">
+      <div id="v3" style="width:100%;aspect-ratio:16/9;border-radius:6px;background:#1b2028"></div>
+      <div id="v3msg" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#cfd6df;font-size:14px">Cargando 3D…</div>
+    </div>
+    <div class="controls">
+      <label><input type="checkbox" id="v3follow" checked> cámara sigue al robot</label>
+      <button id="v3top">Vista general</button>
+      <button id="v3chase">Detrás del robot</button>
+    </div>
+    <div class="legend">Arrastrar = girar, rueda = acercar, clic derecho = mover. Usa three.js desde un
+      CDN (requiere internet); lo demás funciona sin conexión.</div>
     <h2 style="margin-top:14px">Vista lateral (sigue al robot, escala real)</h2>
     <canvas id="side" width="1200" height="500"></canvas>
     <div class="legend">Perfil del piso bajo el recorrido: rampas, escalera y niveles a escala 1:1. El robot se
@@ -96,7 +108,7 @@
 <script>
 const D = /*__DATA__*/null;
 const A = D.arena, F = D.frames, R = D.robot;
-const cv = document.getElementById("cv"), cx = cv.getContext("2d");
+const cv = document.getElementById("cv"); let cx = cv.getContext("2d");
 const COL = { red: "#c62828", yellow: "#e8c400", green: "#128a3a", blue: "#1d8fc4", cyan: "#3cc8dc",
               purple: "#8e44ad", navy: "#3c3c8c", magenta: "#d020c8", white: "#ffffff" };
 const ZCOL = { 3: COL.red, 4: COL.yellow, 5: COL.green, 6: COL.blue, 7: COL.navy };
@@ -115,7 +127,8 @@ function view() {
   return { x0: -2, y0: -2, w: A.w + 4, h: A.h + 4 };
 }
 let V = view(), K = 1;
-function T(x, y) { return [(x - V.x0) * K, cv.height - (y - V.y0) * K]; }
+let CH = 620;                       // alto del lienzo donde se dibuja (vista superior o textura 3D)
+function T(x, y) { return [(x - V.x0) * K, CH - (y - V.y0) * K]; }
 function rect(r, fill, stroke, lw) {
   const [a, b] = T(r[0], r[3]), [c, d] = T(r[2], r[1]);
   if (fill) { cx.fillStyle = fill; cx.fillRect(a, b, c - a, d - b); }
@@ -329,11 +342,12 @@ sv.addEventListener("click", e => {
 });
 
 function draw() {
-  V = view(); K = cv.width / V.w;
+  V = view(); K = cv.width / V.w; CH = cv.height;
   cx.clearRect(0, 0, cv.width, cv.height);
   drawArena();
   if (F.length) drawFrame();
   drawSide();
+  if (window.draw3d) window.draw3d();
   updatePanel();
 }
 
@@ -415,6 +429,183 @@ function fit() {
 }
 window.addEventListener("resize", fit);
 fit();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+  const msg = document.getElementById("v3msg");
+  if (!window.THREE || !THREE.OrbitControls) { msg.textContent = "No se pudo cargar three.js (¿sin internet?)"; return; }
+  msg.style.display = "none";
+  const host = document.getElementById("v3");
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
+  host.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x1b2028);
+  const camera = new THREE.PerspectiveCamera(45, 16 / 9, 1, 3000);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 0.55));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.45); sun.position.set(-80, 220, 120); scene.add(sun);
+  window._v3 = { renderer, scene, camera };
+
+  // sim (x, y, z) -> three (x, z, -y)
+  const P = (x, y, z) => new THREE.Vector3(x, z, -y);
+
+  // ---- textura del piso: la misma vista superior dibujada en un lienzo grande
+  const tex = document.createElement("canvas");
+  const RES = 8; tex.width = Math.round(A.w * RES); tex.height = Math.round(A.h * RES);
+  const save = { cx, V, K, CH };
+  cx = tex.getContext("2d"); V = { x0: 0, y0: 0, w: A.w, h: A.h }; K = RES; CH = tex.height;
+  drawArena();
+  cx = save.cx; V = save.V; K = save.K; CH = save.CH;
+  const floorTex = new THREE.CanvasTexture(tex);
+  floorTex.anisotropy = 8;
+  const floorMat = new THREE.MeshLambertMaterial({ map: floorTex });
+  const sideMat = new THREE.MeshLambertMaterial({ color: 0x9aa4b2 });
+
+  // cuadrilátero con altura por esquina y UV = posición en la pista
+  function quad(x0, y0, x1, y1, z00, z10, z11, z01, mat) {
+    const g = new THREE.BufferGeometry();
+    const v = [[x0, y0, z00], [x1, y0, z10], [x1, y1, z11], [x0, y1, z01]];
+    const pos = [], uv = [];
+    for (const k of [0, 1, 2, 0, 2, 3]) {
+      const p = P(v[k][0], v[k][1], v[k][2]); pos.push(p.x, p.y, p.z);
+      uv.push(v[k][0] / A.w, v[k][1] / A.h);
+    }
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, mat); m.material.side = THREE.DoubleSide; scene.add(m); return m;
+  }
+  function box(x0, y0, x1, y1, z0, z1, color) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, z1 - z0, y1 - y0),
+                             new THREE.MeshLambertMaterial({ color }));
+    m.position.copy(P((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2)); scene.add(m); return m;
+  }
+  function pillar(r, z, color) {           // costados de una plataforma (del suelo a su altura)
+    if (z <= 0.01) return;
+    box(r[0], r[1], r[2], r[3], -0.01, z - 0.05, color || 0x8d97a5);
+  }
+  const Z = A.z;
+  for (const k of ["1", "2", "3", "4"]) {
+    const r = A.levels[k];
+    pillar(r, Z[k]);
+    quad(r[0], r[1], r[2], r[3], Z[k], Z[k], Z[k], Z[k], floorMat);
+  }
+  const r1 = A.ramps[0], r2 = A.ramps[1];
+  quad(r1[0], r1[1], r1[2], r1[3], Z["1"], Z["2"], Z["2"], Z["1"], floorMat);
+  quad(r2[0], r2[1], r2[2], r2[3], Z["3"], Z["3"], Z["2"], Z["2"], floorMat);
+  // escalera: 8 peldaños por tramo (sube hacia -x)
+  for (const f of A.flights) {
+    const n = A.stair_steps, tread = (f[2] - f[0]) / n, rise = (Z["4"] - Z["3"]) / n;
+    for (let k = 0; k < n; k++) {
+      const x1 = f[2] - k * tread, x0 = x1 - tread;
+      box(x0, f[1], x1, f[3], Z["3"], Z["3"] + (k + 1) * rise, 0xb9bfd8);
+    }
+  }
+  // props
+  const MAG = 0xd020c8;
+  for (const [name, pr] of Object.entries(A.props)) {
+    const r = pr.rect;
+    box(r[0], r[1], r[2], r[3], pr.base, pr.base + pr.h, MAG);
+  }
+  for (const w of A.walls) {
+    const [a, b] = w, L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(L, 8, 0.8), new THREE.MeshLambertMaterial({ color: 0x5a616b }));
+    m.position.copy(P((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, Z["2"] + 4));
+    m.rotation.y = Math.atan2(b[1] - a[1], b[0] - a[0]); scene.add(m);
+  }
+  for (const o of A.obstacles) box(o[0], o[1], o[2], o[3], Z["2"], Z["2"] + 1, 0x8c6ec8);
+  box(A.tope[0], A.tope[1], A.tope[2], A.tope[3], Z["1"], Z["1"] + 1, 0x888888);
+
+  // objetos móviles
+  const cube = new THREE.Mesh(new THREE.BoxGeometry(5, 5, 5), new THREE.MeshLambertMaterial({ color: 0xf5d000 }));
+  scene.add(cube);
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(1.5, 20, 14), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+  scene.add(ball);
+  const PH = A.prism_h;
+  const prism = new THREE.Mesh(new THREE.BoxGeometry(6.4, PH, 6.4), new THREE.MeshLambertMaterial({ color: 0xe8c400 }));
+  scene.add(prism);
+
+  // robot: orugas, caja del mBot2, brazo y garra (marco local: +x adelante, +y arriba, -z izquierda)
+  const robot = new THREE.Group(); scene.add(robot);
+  const L = R.track_len, off = (R.robot_w - R.belt_w) / 2;
+  for (const sd of [-1, 1]) {
+    const t = new THREE.Mesh(new THREE.BoxGeometry(L, 5, R.belt_w), new THREE.MeshLambertMaterial({ color: 0x2a2f36 }));
+    t.position.set(0, 2.5, sd * off); robot.add(t);
+  }
+  const bodyM = new THREE.Mesh(new THREE.BoxGeometry(L * 0.62, 6, R.robot_w - 2 * R.belt_w),
+                               new THREE.MeshLambertMaterial({ color: 0x4fc3f7 }));
+  bodyM.position.set(-L * 0.12, 6.5, 0); robot.add(bodyM);
+  const pivot = new THREE.Vector3(R.arm_pivot_fwd - R.ref_rot_fwd, R.arm_pivot_h, 0);
+  const armMat = new THREE.MeshLambertMaterial({ color: 0x2266cc });
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), armMat); robot.add(arm);
+  const claw = new THREE.Mesh(new THREE.BoxGeometry(R.claw_tip + 2, 2.5, 6),
+                              new THREE.MeshLambertMaterial({ color: 0xff8c00 }));
+  robot.add(claw);
+  const probes = new THREE.Mesh(new THREE.BoxGeometry(1, 0.6, R.probe_pitch * 3 + 1),
+                                new THREE.MeshLambertMaterial({ color: 0xff3d00 }));
+  probes.position.set(R.sensor_fwd - R.ref_rot_fwd, 0.6, 0); robot.add(probes);
+
+  camera.position.copy(P(A.w * 0.5, -45, 250)); controls.target.copy(P(A.w * 0.5, A.h * 0.5, 10));
+  let lastRobot = null;
+  document.getElementById("v3follow").checked = false;   // empieza con la vista general
+  document.getElementById("v3top").onclick = () => {
+    document.getElementById("v3follow").checked = false;
+    controls.target.copy(P(A.w * 0.5, A.h * 0.5, 10)); camera.position.copy(P(A.w * 0.5, -45, 250));
+  };
+  document.getElementById("v3chase").onclick = () => {
+    document.getElementById("v3follow").checked = true;
+    if (!F.length) return;
+    const f = F[i], c = Math.cos(f[3] * Math.PI / 180), s_ = Math.sin(f[3] * Math.PI / 180);
+    controls.target.copy(P(f[1], f[2], f[4] + 5));
+    camera.position.copy(P(f[1] - 55 * c, f[2] - 55 * s_, f[4] + 45));
+  };
+
+  window.draw3d = function () {
+    if (!F.length) return;
+    const f = F[i];
+    robot.position.copy(P(f[1], f[2], f[4]));
+    robot.rotation.set(0, 0, 0);
+    robot.rotateY(f[3] * Math.PI / 180);
+    robot.rotateZ(f[5] * Math.PI / 180);
+    // garra: alcance horizontal y altura sobre el robot
+    const reach = Math.hypot(f[13][0] - f[1], f[13][1] - f[2]) / Math.max(0.5, Math.cos(f[5] * Math.PI / 180));
+    const cl = new THREE.Vector3(reach, f[6], 0);
+    claw.position.copy(cl);
+    claw.material.color.set(f[7] ? 0xff8c00 : 0xffc480);
+    const mid = pivot.clone().add(cl).multiplyScalar(0.5), len = pivot.distanceTo(cl);
+    arm.position.copy(mid); arm.scale.set(len, 1.2, 1.2);
+    arm.rotation.set(0, 0, Math.atan2(cl.y - pivot.y, cl.x - pivot.x));
+    cube.position.copy(P(f[9][0], f[9][1], f[9][2]));
+    ball.position.copy(P(f[10][0], f[10][1], f[10][2]));
+    prism.position.copy(P(f[11][0], f[11][1], Z["3"] + PH / 2 - (f[11][2] ? 12 : 0)));
+    if (document.getElementById("v3follow").checked) {
+      const tgt = P(f[1], f[2], f[4] + 5);
+      if (lastRobot) camera.position.add(tgt.clone().sub(lastRobot));
+      else {
+        const c = Math.cos(f[3] * Math.PI / 180), s_ = Math.sin(f[3] * Math.PI / 180);
+        camera.position.copy(P(f[1] - 55 * c, f[2] - 55 * s_, f[4] + 75));
+      }
+      controls.target.copy(tgt); lastRobot = tgt;
+    } else lastRobot = null;
+    controls.update(); renderer.render(scene, camera);
+  };
+  function resize() {
+    const w = host.clientWidth, h = host.clientHeight;
+    renderer.setSize(w, h, false); renderer.domElement.style.width = "100%"; renderer.domElement.style.height = "100%";
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+  window.addEventListener("resize", resize); resize();
+  (function loop() {
+    try { controls.update(); renderer.render(scene, camera); }
+    catch (e) { msg.style.display = "flex"; msg.textContent = "Error 3D: " + e.message; console.error(e); return; }
+    requestAnimationFrame(loop);
+  })();
+  window.draw3d();
+})();
 </script>
 </body>
 </html>

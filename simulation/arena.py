@@ -339,7 +339,10 @@ class Arena:
             "z": {str(k): round(v, 1) for k, v in self.Z.items()},
             "ramps": [self.ramp1, self.ramp2],
             "stairs": self.stairs, "flights": self.flights,
-            "props": {k: {"rect": r, "h": h} for k, (r, h, _) in self.props.items()},
+            "props": {k: {"rect": r, "h": h,
+                          "base": self.height((r[0] + r[2]) / 2, (r[1] + r[3]) / 2) or 0.0}
+                      for k, (r, h, _) in self.props.items()},
+            "prism_h": PRISM_H, "stair_steps": STAIR_STEPS,
             "walls": self.walls, "room": self.room, "tope": self.tope,
             "obstacles": self.obstacles,
             "holes": self.holes,

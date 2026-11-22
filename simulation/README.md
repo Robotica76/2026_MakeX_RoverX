@@ -16,7 +16,9 @@ python3 simulation/run_auto.py --ramp-deg 40 --true com_h=11   # rampas de 40° 
 
 Solo usa la biblioteca estándar de Python. Cada corrida escribe `build/sim/rover_sim.html`: una
 reproducción con la pista, el robot, sus sondas, la garra, el rastro, los eventos y la tabla
-**juez vs. programa**, más una **vista lateral** que sigue al robot a escala real (perfil del
+**juez vs. programa**, una **vista 3D** (three.js desde un CDN: niveles a su altura, rampas,
+escalera de dos tramos, props, robot con pitch, brazo y garra; cámara libre o siguiendo al
+robot), una **vista lateral** que sigue al robot a escala real (perfil del
 piso con rampas y escalera, robot inclinado con su pitch, brazo y garra a su altura) y la
 altura del robot en el tiempo. Clic en un evento, en una misión o en la gráfica de altura
 lleva a ese momento; barra espaciadora = reproducir.
@@ -61,15 +63,22 @@ pasillo y el tope desvían el rumbo al pisarlos.
 | **Volcadura**: la subida gradual de potencia casi no cambia el margen; lo que manda es la inclinación con la altura del centro de masa | brazo bajo y al frente en cada pendiente (`h_climb`): margen 1.8 → 3.9 cm (centro de masa a 11 cm, rampa 35°). Recortar la potencia en pendiente fuerte dejaba al robot parado a media rampa de 40°: se quitó. Limitar la potencia de cada oruga frenaba la dirección: solo se limita el avance |
 | Rodeo de la torre: el giro en el lugar barría la torre (~13 cm de radio) o volvía sobre una tarjeta | `TOWER_DETOUR` con rumbos absolutos, regreso entre dos tarjetas |
 
+## Estrategia que se simula
+
+- **Reinicio en cada zona de inicio** (estrategia del equipo): al completar un nivel el robot pide
+  reinicio en la zona de color del siguiente; el simulador hace de equipo (recoloca con ±0.7 cm
+  y ±1.5° de error, descuenta 15 s, presiona A). Tras una falla crítica o una caída, reinicio en la
+  zona del nivel que jugaba; la primera caída es advertencia y las siguientes restan 20.
+- **Nivel 1 por comandos** (rectas con rumbo del IMU que terminan en una línea perpendicular).
+- **Nivel 3 por maniobra**: salir de la zona azul, tomar el prisma con la garra, dejarlo en la
+  zona punteada por distancias fijas, retroceder y cruzar la línea de la escalera para alinearse.
+- **Pelota omitida** por ahora (misiones 8 y 12; pasos en `BALL_STEPS`).
+
 ## Estado (pista reconstruida)
 
-Sin ruido, las misiones **1 a 10 pasan** con el juez arrancando en el nivel 1, 2 o 3, y la 11
-lee 4 de las 6 tarjetas. Monte Carlo con ruido (40 corridas): zona 5 en 90 % (desde el nivel 2);
-prisma 100 %, pelota 100 %, escalera 98 % (desde el nivel 3).
-
-**Pendiente (nivel 4)**: la lectura de tarjetas sigue de largo y sale de la arena (debe parar en
-la X azul o tras la última tarjeta); detrás de la torre solo caben 4 de las 6 tarjetas antes de
-volver a la línea; faltan la pelota en la casilla roja (12) y la meta (13).
+Monte Carlo de la estrategia completa, 20 corridas con ruido desde el nivel 1: M1 a M7 100 %,
+escalera 95 %, torre 90 %, colores 85 % (4 de 6 tarjetas), meta 80 %; mediana 980 puntos, sin
+caídas.
 
 ## Límites
 
