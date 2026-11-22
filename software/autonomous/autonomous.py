@@ -20,6 +20,8 @@ heading_ref = 0          # rumbo de mapa = hal.heading() + heading_ref (paso "re
 goal_entry = None        # odometría al entrar a la zona de la meta (lectura de tarjetas)
 run_level = 1            # nivel en el que arrancó el autónomo (o el del último reinicio)
 current_level = 1        # nivel de la misión en curso
+pass_skipped = set()     # misiones saltadas en la pasada actual (ya hechas antes de un reinicio)
+pass_ran = set()         # misiones corridas en la pasada actual
 
 
 def reset_state():
@@ -279,6 +281,17 @@ def run_step(step):
         if acc[1] > 0:
             heading_ref = step[1] - acc[0] / acc[1]
         return ok
+    if kind in ("if_skipped", "if_ran"):
+        # ("if_skipped", id, [pasos]): la misión id se saltó en esta pasada (ya estaba hecha y el
+        # robot fue recolocado): pasos para llegar a donde ella lo habría dejado.
+        # ("if_ran", id, [pasos]): la misión id sí se corrió en esta pasada.
+        hit = step[1] in (pass_skipped if kind == "if_skipped" else pass_ran)
+        if not hit:
+            return True
+        for sub in step[2]:
+            if not run_step(sub):
+                return False
+        return True
     if kind == "if_start":
         if step[1] != run_level:
             return True
@@ -383,9 +396,15 @@ def run(start_level=1, budget_s=None, t_start=None, skip=None):
     retries = 0
     while True:
         restart = None
+        pass_skipped.clear()
+        pass_ran.clear()
         for m in ms.MISSIONS:
-            if m["level"] < level or m["id"] in done:
+            if m["level"] < level:
                 continue
+            if m["id"] in done:
+                pass_skipped.add(m["id"])
+                continue
+            pass_ran.add(m["id"])
             if hal.now() - t_start >= budget_s or hal.abort_requested():
                 restart = None
                 break
@@ -411,6 +430,11 @@ def run(start_level=1, budget_s=None, t_start=None, skip=None):
                     if cfg.RESTART_AT_ZONES and retries < cfg.MAX_RETRIES:
                         restart = m["level"]
                         retries += 1
+                        # al reintentar el nivel se repite la navegación (misiones críticas);
+                        # solo se saltan las de manipulación ya logradas
+                        for mm in ms.MISSIONS:
+                            if mm["level"] == restart and mm["critical"]:
+                                done.discard(mm["id"])
                     break
         if restart is None:
             break

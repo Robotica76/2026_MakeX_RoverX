@@ -36,6 +36,8 @@
 # El robot NO lleva ultrasónico: los acercamientos se hacen con el encoder, desde un cruce o
 # el borde de una zona, usando medidas de la pista (cfg.P "ped1_from_cross", etc.).
 #   ("climb",) / ("stairs"[, extra_cm])   subir rampa / escalera esperando a quedar plano
+#   ("if_skipped", id, [pasos]) / ("if_ran", id, [pasos])  según si la misión id se saltó (ya
+#                              estaba hecha antes de un reinicio) o se corrió en esta pasada
 #   ("if_start", nivel, [pasos])  pasos que solo se hacen si el autónomo arrancó en ese nivel
 #   ("crest", cm)              subir hasta pasar la cima y avanzar cm (poco espacio arriba)
 #   ("claw", apertura) / ("arm", altura)
@@ -73,7 +75,8 @@ CORRIDOR = [
     ("drive", -15, 12.6),
     ("drive", -45, 40.5),
     ("seek", "v_slow", 35, 0),  # hacia el este hasta la diagonal que baja a la rampa blanca
-    ("center",), ("spin", 1),   # centro de giro sobre la diagonal y girar a seguirla hacia abajo
+    ("center",), ("head", 45),  # sobre la diagonal, rumbo de la diagonal (IMU; buscar la línea
+                                # girando fallaba con ruido)
 ]
 L3_IN_CM = 17.0             # nivel 3: de la orilla de la zona azul a quedar completamente dentro
 # Nivel 3 POR MANIOBRA (estrategia del equipo: los puntos son por dejar el prisma en la zona
@@ -102,9 +105,15 @@ PRISM_MANEUVER = [
 # De ahí a la escalera: cruzar la línea de la escalera de forma perpendicular (referencia lateral:
 # cada oruga debe ir sobre su tramo) y girar al oeste.
 TO_STAIRS = [
-    ("drive", L3_TO_STAIRS_HEAD, L3_TO_STAIRS_CM),
     ("cross", "v_slow", 15, -90), ("center",),
     ("head", 180),
+]
+# Reintento del nivel 3 con el prisma ya en la zona: de la zona azul directo al punto frente a la
+# escalera (pasa al norte del prisma).
+L3_RETRY_TO_STAIRS = [
+    ("ref", 90),
+    ("edge", "blue", "v_slow", 30, 90),
+    ("drive", 156, 68.0),
 ]
 # Pelota (misión 8): OMITIDA por ahora (decisión del equipo). Pasos guardados para después.
 BALL_HEAD = 113
@@ -172,14 +181,18 @@ MISSIONS = [
                ("claw", "claw_open"), ("arm", "h_carry"), ("retreat",),
                ("straight", -L2_BACK_CM, "v_slow"), ("head", 90)]},
     {"id": 5, "level": 2, "pts": 100, "name": "Zona obstaculos", "critical": True,
-     "steps": [("line", ("end",), "v_slow", 15)] + CORRIDOR},
+     # reintento con la misión 4 ya hecha: colocado en la T mirando al este, girar al sur
+     "steps": [("if_skipped", 4, [("ref", 0), ("jturn", 90)]),
+               ("line", ("end",), "v_slow", 15)] + CORRIDOR},
     {"id": 6, "level": 2, "pts": 100, "name": "Subir nivel 3", "critical": True, "end_level": True,
      # sigue la línea por la rampa blanca hasta salir de la zona azul (ya completamente dentro)
      # Al ver la zona azul avanza L3_IN_CM: ya completamente dentro, pero antes de la curva de la
      # S (que empieza dentro de la zona; con "salir de la zona" el robot ya la había pasado).
      # Nunca detenerse sobre la pendiente: al ver la zona azul sigue L3_IN_CM sin parar. El rumbo
      # promedio de toda la rampa (recta al sur) queda como referencia del nivel 3.
-     "steps": [("line", ("pitch",), "v_line", 12), ("arm", "h_climb"),
+     # despacio: la curva de la diagonal a la vertical (47°) se pasaba a v_line (sondas a solo
+     # 3 cm del centro de giro: poca anticipación)
+     "steps": [("line", ("pitch",), "v_slow", 16), ("arm", "h_climb"),
                ("line_ref", 90, ("color_cm", "blue", L3_IN_CM), "v_ramp", 10)]},
 
     # ------------------------------------------------------------ NIVEL 3 (zona azul)
@@ -190,7 +203,9 @@ MISSIONS = [
      # Entre la escalera y la torre hay ~20 cm y el robot mide ~24 cm con la garra: no cabe
      # completo sobre la línea; al ver la zona verde avanza STAIRS_TOP_CM y el brazo sube sin
      # detenerse (parar en la escalera lo hacía resbalar). Termina de entrar al rodear la torre.
-     "steps": TO_STAIRS + [("arm", "h_climb"),
+     "steps": [("if_skipped", 7, L3_RETRY_TO_STAIRS),
+               ("if_ran", 7, [("drive", L3_TO_STAIRS_HEAD, L3_TO_STAIRS_CM)])] + TO_STAIRS +
+              [("arm", "h_climb"),
                            ("crest", STAIRS_TOP_CM, 180, "green", "h_carry")]},
 
     # ------------------------------------------------------------ NIVEL 4 (zona verde)
