@@ -80,7 +80,7 @@ def straight(cm, speed=None, timeout=None):
         timeout = 1.0 + abs(cm) / 8.0
     hal.reset_odometer()
     goal = abs(cm)
-    return straight_until(lambda: hal.odometer_cm() >= goal, speed, timeout)
+    return straight_until(lambda: abs(hal.odometer_cm()) >= goal, speed, timeout)
 
 
 def climb(speed=None, timeout=None, extra_cm=None):

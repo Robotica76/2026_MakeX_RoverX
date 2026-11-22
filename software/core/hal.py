@@ -70,9 +70,14 @@ def stop():
 
 
 def _encoder_deg():
-    a = mbot2.EM_get_angle("EM1")
-    b = mbot2.EM_get_angle("EM2")
-    return (abs(a) + abs(b)) / 2
+    """Avance del robot en grados de encoder, CON signo (adelante +, atrás -).
+
+    Es el promedio de las dos orugas con su signo, así que un giro en el lugar no suma
+    (antes se usaba abs() y los giros cambiaban la odometría, lo que movía las distancias
+    medidas desde un cruce o una tarjeta)."""
+    a = cfg.LEFT_SIGN * mbot2.EM_get_angle("EM1")
+    b = cfg.RIGHT_SIGN * mbot2.EM_get_angle("EM2")
+    return (a + b) / 2
 
 
 def reset_odometer():
@@ -81,11 +86,12 @@ def reset_odometer():
 
 
 def odo_abs():
-    """Odometría absoluta (cm desde el arranque); no se reinicia."""
+    """Avance absoluto (cm desde el arranque, con signo); no se reinicia."""
     return _encoder_deg() * geo.cm_per_deg()
 
 
 def odometer_cm():
+    """Avance (cm, con signo) desde el último reset_odometer()."""
     return (_encoder_deg() - _odo_zero) * geo.cm_per_deg()
 
 

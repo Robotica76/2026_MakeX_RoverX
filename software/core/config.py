@@ -31,37 +31,39 @@ LOOP_DT = 0.01           # s entre lecturas del control
 # ---------------------------------------------------------------- parámetros ajustables
 P = {
     # --- geometría del robot (MEDIR, hoja en docs/medidas_robot.md).
+    # TODO(medidas): los valores marcados TODO son ESTIMADOS a ojo de la foto del diseño
+    # propuesto (docs/img/medidas_propuestas.webp), no medidos. Reemplazarlos con la hoja.
     # Las distancias "_fwd" se miden hacia adelante desde el PUNTO DE REFERENCIA (punto naranja
     # sobre la caja del mBot2). El centro de giro real de un robot de orugas es el punto medio de
     # las orugas a lo largo; ref_rot_fwd dice cuánto está adelante de la referencia.
-    "ref_rot_fwd": 0.0,      # referencia -> punto medio de las orugas (+ = adelante)
-    "track_len": 22.0,       # largo de la oruga (de punta a punta)
-    "belt_w": 4.0,           # ancho de la banda de cada oruga
-    "robot_w": 18.0,         # ancho total, de borde exterior a borde exterior de las orugas
-    "sensor_fwd": 7.0,       # referencia -> sondas del Quad RGB
-    "probe_pitch": 1.3,      # separación entre sondas vecinas del Quad RGB
-    "card_probe_fwd": 7.0,   # referencia -> sonda que lee las tarjetas (la misma barra del Quad RGB)
-    "sprocket_d": 4.4,       # diámetro efectivo de la rueda motriz de la oruga
-    "slip": 1.0,             # factor de patinaje (distancia real / teórica)
+    "ref_rot_fwd": 4.5,      # TODO(medir) referencia -> punto medio de las orugas (+ = adelante)
+    "track_len": 19.0,       # TODO(medir) largo de la oruga (de punta a punta)
+    "belt_w": 4.0,           # TODO(medir) ancho de la banda de cada oruga
+    "robot_w": 18.5,         # TODO(medir) ancho total, de borde exterior a borde exterior de las orugas
+    "sensor_fwd": 7.5,       # TODO(medir) referencia -> sondas del Quad RGB
+    "probe_pitch": 1.3,      # TODO(medir) separación entre sondas vecinas del Quad RGB
+    "card_probe_fwd": 7.5,   # TODO(medir) referencia -> sonda que lee las tarjetas (la misma barra del Quad RGB)
+    "sprocket_d": 4.4,       # TODO(medir) diámetro efectivo de la rueda motriz de la oruga
+    "slip": 1.0,             # TODO(calibrar con "Probar recta 50") distancia real / teórica
 
     # --- brazo de paralelogramo (MEDIR). Altura = altura del pivote + largo * sen(ángulo)
-    "arm_pivot_fwd": 9.0,    # referencia -> eje del servo del brazo (horizontal)
-    "arm_pivot_h": 9.0,      # altura del eje del servo del brazo sobre el piso
-    "arm_len": 8.0,          # largo de las barras del paralelogramo, eje a eje
-    "arm_grip_dx": 4.0,      # del eje del extremo del brazo al centro de la garra (horizontal)
-    "arm_grip_dz": -2.0,     # del eje del extremo del brazo al centro de la garra (vertical, - = abajo)
-    "claw_tip": 3.0,         # del centro de la garra a su punta delantera
-    "arm_zero": 90,          # ángulo del servo con el brazo HORIZONTAL (CALIBRAR)
-    "arm_dir": -1,           # +1 si subir el ángulo sube el brazo, -1 si lo baja
+    "arm_pivot_fwd": 10.0,   # TODO(medir) referencia -> eje del servo del brazo (horizontal)
+    "arm_pivot_h": 8.0,      # TODO(medir) altura del eje del servo del brazo sobre el piso
+    "arm_len": 7.0,          # TODO(medir) largo de las barras del paralelogramo, eje a eje
+    "arm_grip_dx": 3.0,      # TODO(medir) del eje del extremo del brazo al centro de la garra (horizontal)
+    "arm_grip_dz": -2.0,     # TODO(medir) del eje del extremo del brazo al centro de la garra (vertical, - = abajo)
+    "claw_tip": 3.0,         # TODO(medir) del centro de la garra a su punta delantera
+    "arm_zero": 90,          # TODO(calibrar) ángulo del servo con el brazo HORIZONTAL
+    "arm_dir": -1,           # TODO(calibrar) +1 si subir el ángulo sube el brazo, -1 si lo baja
     "h_floor": 2.5,          # altura de agarre: cubo/pelota en el piso
     "h_pedestal": 12.5,      # sobre el pedestal (10 cm + medio cubo)
     "h_carry": 17.0,         # transporte (>= 5 cm sobre la base)
     "h_bar": 12.0,           # barra de pelotas (10 cm)
 
     # --- garra (CALIBRAR)
-    "claw_open": 90,
-    "claw_cube": 35,
-    "claw_ball": 45,
+    "claw_open": 90,         # TODO(calibrar)
+    "claw_cube": 35,         # TODO(calibrar)
+    "claw_ball": 45,         # TODO(calibrar)
 
     # --- línea
     "line_mode": 1,          # 1 = analógico calibrado (recomendado), 0 = get_offset_track

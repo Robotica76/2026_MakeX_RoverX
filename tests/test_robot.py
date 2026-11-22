@@ -77,7 +77,7 @@ def test_offset_zero_without_line():
 def test_arm_horizontal_at_pivot_height():
     h = cfg.P["arm_pivot_h"] + cfg.P["arm_grip_dz"]
     assert geo.arm_servo(h) == pytest.approx(cfg.P["arm_zero"])
-    full = cfg.P["arm_pivot_fwd"] + cfg.P["arm_len"] + cfg.P["arm_grip_dx"]
+    full = geo.fwd("arm_pivot_fwd") + cfg.P["arm_len"] + cfg.P["arm_grip_dx"]
     assert geo.claw_reach(h) == pytest.approx(full)
 
 
@@ -219,9 +219,9 @@ def test_turn_at_junction_centers_rotation_point(monkeypatch):
     monkeypatch.setattr(motion, "straight", lambda cm, speed=None, timeout=None: moves.append(cm) or True)
     monkeypatch.setattr(motion, "turn", lambda deg, timeout=None: True)
     monkeypatch.setattr(motion, "spin_to_line", lambda d, timeout=3.0: True)
-    lf.last_junction = ("X", hal.odo_abs() - 3.0)
+    lf.last_junction = ("X", hal.odo_abs() - 1.0)
     assert lf.turn_at_junction(90)
-    assert moves[0] == pytest.approx(cfg.P["sensor_fwd"] - 3.0, abs=0.05)
+    assert moves[0] == pytest.approx(geo.turn_advance() - 1.0, abs=0.05)
 
 
 def test_follow_gives_up_when_line_lost():
@@ -425,3 +425,17 @@ def test_bundle_is_single_valid_file_without_project_imports(tmp_path):
     imported = {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
     assert imported <= {"time", "math", "json", "cyberpi", "mbot2", "mbuild", "gamepad"}
     assert not any(isinstance(n, ast.JoinedStr) for n in ast.walk(tree))   # sin f-strings
+
+
+def test_odometer_ignores_turns_in_place(sim):
+    """Un giro en el lugar no debe cambiar el avance (antes abs() lo hacía crecer o bajar)."""
+    sim.em = [50.0, -50.0]          # adelante
+    sim.advance(1.0)
+    fwd_cm = hal.odo_abs()
+    assert fwd_cm > 0
+    sim.em = [50.0, 50.0]           # giro a la derecha en el lugar
+    sim.advance(1.0)
+    assert hal.odo_abs() == pytest.approx(fwd_cm)
+    sim.em = [-50.0, 50.0]          # atrás
+    sim.advance(1.0)
+    assert hal.odo_abs() == pytest.approx(0.0, abs=1e-6)
