@@ -40,7 +40,7 @@ lleva a ese momento; barra espaciadora = reproducir.
 | Archivo | Qué hace |
 | --- | --- |
 | [arena.py](arena.py) | Pista reconstruida de la vista superior del reglamento (1 px = 0.235 cm): líneas, zonas, marcas, alturas de niveles, rampas, escalera de dos tramos, muros del pasillo, props y tarjetas |
-| [physics.py](physics.py) | Orugas (zona muerta, retardo, patinaje, derrape al girar, carga en pendiente), encoders, giroscopio, pitch por la altura del piso, **volcadura** por centro de masa + aceleración, Quad RGB (luz, color y RGB por sonda), brazo y garra, objetos, empujar el prisma, choques y caídas |
+| [physics.py](physics.py) | Orugas (zona muerta, retardo, patinaje general y **por oruga sobre los recortes**, derrape al girar, escuadrarse al empujar un muro, carga en pendiente), encoders, giroscopio, pitch por la altura del piso, **volcadura** por centro de masa + aceleración, Quad RGB (luz, color y RGB por sonda), brazo y garra, objetos, empujar el prisma, choques y caídas |
 | [referee.py](referee.py) | Juez independiente: revisa cada misión con las condiciones del reglamento |
 | [run_auto.py](run_auto.py) | Corrida, reporte, Monte Carlo y reproducción HTML |
 
@@ -73,6 +73,8 @@ pasillo y el tope desvían el rumbo al pisarlos.
 | `seek_line` releía la línea para confirmar y con ruido fallaba | usa la lectura que detuvo el avance |
 | **Nivel 1 por comandos** (pedido del equipo): con rectas por odometría el cubo solo se tomaba en 62 % (error acumulado en ~1 m) | cada recta termina en una línea perpendicular (`cross`): 100 % de 40 corridas, también con línea de 10 mm |
 | **Volcadura**: la subida gradual de potencia casi no cambia el margen; lo que manda es la inclinación con la altura del centro de masa | brazo bajo y al frente en cada pendiente (`h_climb`): margen 1.8 → 3.9 cm (centro de masa a 11 cm, rampa 35°). Recortar la potencia en pendiente fuerte dejaba al robot parado a media rampa de 40°: se quitó. Limitar la potencia de cada oruga frenaba la dirección: solo se limita el avance |
+| **Zona de obstáculos con patinaje**: la oruga que pisa un recorte pierde tracción y el encoder cuenta de más; con tramos por distancia el robot se quedaba corto y chocaba (5 %) | odometría encoders + giroscopio (`odometry.py`: detecta qué oruga patinó y mide con la otra, adelante y en reversa), escuadrarse contra el muro de arriba **por tiempo** (y exacta), seguir rectas del mapa corrigiendo el desvío lateral (`track_line`) y tomar la diagonal sin girar en el lugar: **88 %** |
+| Rampa: con poca potencia el robot se quedaba a media subida | asistencia de subida (`slope_min_v`, `slope_boost`): si inclinado casi no avanza o se resbala, la potencia sube de a poco |
 | Rodeo de la torre: el giro en el lugar barría la torre (~13 cm de radio) o volvía sobre una tarjeta | `TOWER_DETOUR` con rumbos absolutos, regreso entre dos tarjetas |
 
 ## Estrategia que se simula
@@ -90,9 +92,14 @@ pasillo y el tope desvían el rumbo al pisarlos.
 
 ## Estado (pista reconstruida)
 
-Monte Carlo de la estrategia completa, 20 corridas con ruido desde el nivel 1: M1 a M7 100 %,
-escalera 95 %, torre 90 %, colores 85 % (4 de 6 tarjetas), meta 80 %; mediana 980 puntos, sin
-caídas.
+Monte Carlo de la estrategia completa, 20 corridas con ruido y patinaje en los recortes, desde el
+nivel 1 (antes del patinaje la zona 5 daba 100 %; ahora 90 %): M1 a M4 100 %,
+zona 5 y nivel 3 90 %, prisma 90 %, escalera, torre y colores 85 %, meta 80 %; mediana 980.
+
+**Límites conocidos**: si las DOS orugas patinan a la vez, o el robot gira en el lugar con una
+oruga sobre un recorte, ningún sensor interno lo detecta (por eso la referencia es el muro). En
+una rampa de 40° la asistencia evita que se quede parado, pero el avance para quedar
+"completamente dentro" está calculado para la rampa de ~22° del plano: medirlo en la pista.
 
 ## Límites
 

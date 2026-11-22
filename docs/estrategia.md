@@ -33,6 +33,26 @@ color y presiona B. Así la condición con la que terminó un nivel no interfier
 Si un tramo falla, se repite: las misiones de navegación se vuelven a correr y las de
 manipulación ya logradas en ese encendido se saltan.
 
+## Zona de obstáculos (camino al nivel 3)
+
+Los recortes de cartón hacen patinar las orugas y no hay línea. Lo que hace el robot:
+
+1. Al terminar la línea fija su posición en el mapa (`pose`).
+2. Va a un punto lejos del muro de abajo con **odometría encoders + giroscopio** (`goto`): si el
+   giroscopio dice que giró más hacia un lado de lo que dicen los encoders, esa oruga patinó y el
+   avance se mide con la otra.
+3. Al norte **por tiempo** hasta apoyar las orugas en el muro de arriba (`square`): queda
+   escuadrado y con la coordenada y exacta, aunque haya patinado.
+4. Retrocede, gira al este y sigue la recta del mapa a 6 cm del muro corrigiendo el desvío lateral
+   (`track_line`) hasta ver la diagonal; la toma con el seguidor muy despacio, sin girar en el
+   lugar.
+5. Rampa al nivel 3: sigue la línea (no sube en diagonal), brazo bajo al frente, potencia que
+   sube de a poco y **asistencia de subida** si se frena o resbala; nunca se detiene en la
+   pendiente.
+
+Calibrar en pista: `skid` (girar 360° en el lugar: grados de encoder contra giroscopio),
+`track_k`, `slope_min_v` y la posición real de los muros y la salida.
+
 ## Decisiones
 
 - **Nivel 1 por comandos, no siguiendo la línea** (experiencia previa: con la línea delgada y las

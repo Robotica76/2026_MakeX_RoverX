@@ -71,6 +71,10 @@ class Sim:
         self._slide_logged = -9.0
         self.contacts = set()           # props tocados ahora (para registrar el inicio del choque)
         self._hit_logged = {}
+        self.trac = [1.0, 1.0]          # tracción de cada oruga (1 = no patina)
+        self._wall_hit = None
+        # tracción de cada recorte del pasillo (cartón de 1 cm, suelto): 0.35..0.75
+        self.obstacle_trac = [self.rng.uniform(0.35, 0.75) for _ in arena.obstacles]
         self.bumps = set()
         self.fallen = None
         self._sample_cache = {}
@@ -200,9 +204,11 @@ class Sim:
         self.world.enc[0] += dl * self.cfg.LEFT_SIGN
         self.world.enc[1] += dr * self.cfg.RIGHT_SIGN
         # movimiento real sobre el piso
-        v = self.slip_true * (self.vl + self.vr) / 2.0
+        gl = self.vl * self.trac[0]                            # avance real de cada oruga
+        gr = self.vr * self.trac[1]
+        v = self.slip_true * (gl + gr) / 2.0
         tw = (b["robot_w"] - b["belt_w"]) * self.skid
-        w = self.slip_true * (self.vr - self.vl) / tw          # rad/s, antihorario
+        w = self.slip_true * (gr - gl) / tw                    # rad/s, antihorario
         nyaw = self.yaw + math.degrees(w * dt)
         h = math.radians((self.yaw + nyaw) / 2.0)
         nx = self.x + v * dt * math.cos(h)
@@ -215,6 +221,15 @@ class Sim:
             self.vr *= 0.3
             self.acc = 0.0              # el golpe contra un prop no cuenta para volcar
             nx, ny, nyaw = self.x, self.y, self.yaw
+            # empujar un muro con las dos orugas lo "escuadra": la esquina que toca hace de pivote
+            # y la otra oruga alcanza el muro, hasta quedar perpendicular
+            if self._wall_hit is not None and tl > 0 and tr > 0:
+                (ax, ay), (bx, by) = self._wall_hit
+                wall = math.degrees(math.atan2(by - ay, bx - ax))
+                d = (self.yaw - wall) % 180.0 - 90.0        # desvío respecto a perpendicular
+                step = max(-0.4, min(0.4, -d))
+                if abs(d) > 0.3 and not self._blocked(self.x, self.y, self.yaw + step):
+                    nyaw = self.yaw + step
         self._move_to(nx, ny, nyaw)
         self.t_phys += dt
         # giroscopio del CyberPi: rot_z = rumbo antihorario (HEADING_SIGN = -1 en config)
@@ -308,16 +323,24 @@ class Sim:
                 return
 
     def _check_bumps(self):
-        """Recortes del pasillo y tope del nivel 1: al subirse una oruga, el rumbo se desvía."""
+        """Recortes del pasillo y tope del nivel 1: la oruga que pisa uno PATINA (pierde tracción:
+        avanza menos de lo que giran su rueda y su encoder), así que el robot se desvía y la
+        odometría se equivoca. Cada recorte tiene su tracción (cartón suelto, se mueve)."""
         a = self.arena
-        fp = self.footprint()
+        b = self.body
+        off = (b["robot_w"] - b["belt_w"]) / 2.0
+        items = a.obstacles + [a.tope]
+        trac = [1.0, 1.0]
         now = set()
-        for i, r in enumerate(a.obstacles + [a.tope]):
-            if ar.polys_overlap(fp, ar.rect_to_poly(r)):
-                now.add(i)
-                if i not in self.bumps:
-                    self.yaw += self.rng.gauss(0, 2.0 if i < len(a.obstacles) else 0.8) * \
-                        max(self.noise, 0.5)
+        for k, side in enumerate((1, -1)):          # oruga izquierda (+lateral), derecha
+            cx, cy = self.to_world(0.0, side * off)
+            belt = ar.rect_poly(cx, cy, math.radians(self.yaw), b["track_len"], b["belt_w"])
+            for i, r in enumerate(items):
+                if ar.polys_overlap(belt, ar.rect_to_poly(r)):
+                    now.add(i)
+                    trac[k] = min(trac[k], self.obstacle_trac[i] if i < len(self.obstacle_trac)
+                                  else 0.85)
+        self.trac = trac
         self.bumps = now
 
     def _fall(self, why):
@@ -393,9 +416,11 @@ class Sim:
                 hit.add(name)
             elif ar.polys_overlap(cp, poly) and (z or 0) + claw_h - 1.5 < top:
                 hit.add(name)
+        self._wall_hit = None
         for i, (p, q) in enumerate(a.walls):
             if ar.poly_seg_overlap(fp, p, q):
                 hit.add("muro")
+                self._wall_hit = (p, q)
         # subir de golpe a un nivel más alto (una pared de nivel) también bloquea
         zc = a.height(x, y)
         if zc is not None and zc - self.z > 3.0:

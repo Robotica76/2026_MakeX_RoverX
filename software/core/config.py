@@ -44,6 +44,10 @@ P = {
     "probe_pitch": 1.3,      # TODO(medir) separación entre sondas vecinas del Quad RGB
     "card_probe_fwd": 7.5,   # TODO(medir) referencia -> sonda que lee las tarjetas (la misma barra del Quad RGB)
     "sprocket_d": 4.4,       # TODO(medir) diámetro efectivo de la rueda motriz de la oruga
+    "skid": 1.3,             # TODO(calibrar) derrape al girar: B efectivo = distancia entre orugas * skid
+                             # (girar 360° en el lugar: grados de encoder vs giroscopio)
+    "slip_tol": 0.05,
+    "track_k": 4.0,          # grados de corrección de rumbo por cm de desvío lateral (odometry.track)        # grados por ciclo de diferencia giroscopio/encoders para sospechar patinaje
     "slip": 1.0,             # TODO(calibrar con "Probar recta 50") distancia real / teórica
 
     # --- brazo de paralelogramo (MEDIR). Altura = altura del pivote + largo * sen(ángulo)
@@ -104,6 +108,8 @@ P = {
     # control contra volcadura (activo en rampas y escalera)
     "tip_pitch": 8,          # grados: desde aquí la potencia solo sube de a poco
     "tip_slew": 120,         # %/s: cuánto puede subir la potencia por segundo inclinado
+    "slope_min_v": 4.0,      # cm/s: subiendo más lento que esto (o resbalando) -> asistencia
+    "slope_boost": 60,       # %/s: cuánto sube la potencia extra mientras haga falta (máx. +60)
     "h_top": 18.0,           # brazo al máximo (garra lo más recogida): arranque en la zona verde
     "h_climb": 8.0,          # garra baja y al frente al subir: adelanta y baja el centro de masa
 

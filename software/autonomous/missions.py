@@ -24,6 +24,10 @@
 #   ("line_ref", rumbo, cond, vel, timeout)  seguir la línea promediando el rumbo -> referencia
 #   ("head", rumbo)            girar hasta ese rumbo de mapa
 #   ("drive", rumbo, cm[, vel])  girar a ese rumbo y avanzar sosteniéndolo con el IMU
+#   ("pose", x, y, rumbo)      posición conocida en el mapa (cm; x este, y sur) para la odometría
+#   ("goto", x, y[, vel])      ir a ese punto con odometría encoders + giroscopio (patinaje)
+#   ("square", rumbo, s, "x"|"y", valor)  apoyarse en un muro (por tiempo) para fijar esa coordenada
+#   ("track_line", rumbo, "x"|"y", valor, max_cm)  seguir esa recta del mapa hasta ver una línea
 #   ("spin", dir)              girar hasta encontrar la línea (1 der, -1 izq)
 #   ("cross", vel, max_cm[, rumbo])  recto hasta que las dos exteriores ven una línea que cruza
 #   ("seek"[, vel, max_cm, rumbo])  recto con giroscopio hasta que las sondas centrales vean línea
@@ -67,18 +71,32 @@ L1_BACK_CM = 2.0            # nivel 1: retroceso tras el cubo para poder girar s
 L2_BACK_CM = 3.5            # nivel 2: lo mismo frente al pedestal donde se deja el cubo
 # Rumbos de mapa (pasos "ref" y "head"): 0 = este, 90 = sur, 180 = oeste, -90 = norte, en la
 # vista superior del reglamento. Se fijan con "ref" sobre una recta conocida.
+# Puntos del mapa en cm (x este desde la orilla izquierda, y SUR desde la orilla de arriba),
+# del plano reconstruido (simulation/arena.py). TODO(medir en pista).
+CORRIDOR_START = (151.9, 48.3)   # centro de giro al terminar la línea (2 cm sin línea)
+CORRIDOR_W1 = (177.1, 45.0)      # alejarse del muro de abajo (y del de la izquierda) antes de girar
+CORRIDOR_TO_WALL_S = 6.0         # s al norte a v_slow: ~35 cm hasta el muro con patinaje, y empuja
+CORRIDOR_WALL_Y = 0.9 + 9.5      # y del centro de giro con el frente de las orugas en el muro
+CORRIDOR_BACK_CM = 8.0           # retroceso para girar al este (con patinaje queda >= 5 cm: holgura)
+CORRIDOR_EXIT_DY = 6.0           # la recta de salida va 6 cm al sur del muro (centro de la abertura)
 # Nivel 2: cruzar la zona de obstáculos (sin línea) de la entrada (abajo a la izquierda) a la
 # salida (arriba a la derecha). Al girar en el lugar el robot barre ~13 cm y la línea termina a
 # 12 cm del muro de abajo, así que el primer giro es suave (lo mostró el simulador).
 CORRIDOR = [
-    # ("drive", rumbo de mapa, cm): cada tramo SOSTIENE su rumbo con el IMU, así el error del
-    # giro y los golpes de los recortes se corrigen mientras avanza.
-    ("drive", 0, 2),            # line_end ya avanzó 2 cm sin línea
-    ("drive", -15, 12.6),
-    ("drive", -45, 40.5),
-    ("seek", "v_slow", 35, 0),  # hacia el este hasta la diagonal que baja a la rampa blanca
-    ("center",), ("head", 45),  # sobre la diagonal, rumbo de la diagonal (IMU; buscar la línea
-                                # girando fallaba con ruido)
+    # Los recortes hacen PATINAR las orugas (con tramos por distancia: 5 % con patinaje en el
+    # simulador). La odometría encoders + giroscopio (odometry.py) corrige cuando patina UNA oruga;
+    # cuando patinan las dos no hay forma de saberlo, así que la referencia es el muro de arriba:
+    ("pose", CORRIDOR_START[0], CORRIDOR_START[1], 0),   # al terminar la línea
+    ("goto", CORRIDOR_W1[0], CORRIDOR_W1[1]),            # lejos del muro de abajo
+    ("square", -90, CORRIDOR_TO_WALL_S, "y", CORRIDOR_WALL_Y),    # al norte hasta el muro: y exacta
+    ("straight", -CORRIDOR_BACK_CM, "v_slow"),           # espacio para girar
+    # terminar listo para seguir la línea: al este por la recta y = muro + retroceso hasta la
+    # diagonal (absorbe el error a lo largo y corrige el lateral)
+    ("track_line", 0, "y", CORRIDOR_WALL_Y + CORRIDOR_EXIT_DY, 90),
+    # tomar la diagonal con el seguidor MUY despacio, sin girar en el lugar: un giro con una
+    # oruga sobre un recorte corre el robot hasta 4 cm (la odometría no lo puede ver) y cerca
+    # del muro de arriba lo hacía chocar
+    ("line", ("cm", 10), "v_turn_min", 8),
 ]
 L3_IN_CM = 17.0             # nivel 3: de la orilla de la zona azul a quedar completamente dentro
 # Nivel 3 POR MANIOBRA (estrategia del equipo: los puntos son por dejar el prisma en la zona
@@ -199,7 +217,7 @@ MISSIONS = [
      # despacio: la curva de la diagonal a la vertical (47°) se pasaba a v_line (sondas a solo
      # 3 cm del centro de giro: poca anticipación)
      "steps": [("line", ("pitch",), "v_slow", 16), ("arm", "h_climb"),
-               ("line_ref", 90, ("color_cm", "blue", L3_IN_CM), "v_ramp", 10)]},
+               ("line_ref", 90, ("color_cm", "blue", L3_IN_CM), "v_ramp", 20)]},   # 20 s: subida lenta con asistencia
 
     # ------------------------------------------------------------ NIVEL 3 (zona azul)
     {"id": 7, "level": 3, "pts": 100, "name": "Mover prisma", "critical": False,

@@ -12,6 +12,7 @@ import motion
 import linefollow as lf
 import gripper
 import missions as ms
+import odometry as odo
 
 cards = []               # [(color, odometría absoluta al detectarla)]
 results = []             # [(id, ok)]
@@ -238,6 +239,45 @@ def run_step(step):
         speed = val(step[3]) if len(step) > 3 else cfg.P["v_slow"]
         motion.turn_to(target)
         return motion.straight(val(step[2]), speed, target=target)
+    if kind == "pose":
+        # ("pose", x, y, rumbo): posición conocida en el mapa (cm; x este, y sur) -> odometría
+        odo.set_pose(step[1], step[2], step[3])
+        heading_ref = step[3] - hal.heading()
+        return True
+    if kind == "square":
+        # ("square", rumbo, segundos, coord, valor[, vel]): avanzar despacio DURANTE ese tiempo
+        # hasta apoyar las orugas en un muro (rumbo perpendicular a él) y fijar esa coordenada de
+        # la odometría ("x" o "y") y el rumbo. Por tiempo y no por distancia: con patinaje los
+        # encoders cuentan de más y el robot se quedaba antes del muro (lo mostró el simulador).
+        speed = val(step[5]) if len(step) > 5 else cfg.P["v_slow"]
+        motion.turn_to(map_target(step[1]))
+        x, y, _ = odo.pose()
+        odo.track(x, y, step[1], speed, timeout=val(step[2]))   # sostiene rumbo y línea recta
+        x, y, _ = odo.pose()
+        if step[3] == "x":
+            x = step[4]
+        else:
+            y = step[4]
+        odo.set_pose(x, y, step[1])
+        heading_ref = step[1] - hal.heading()
+        return True
+    if kind == "track_line":
+        # ("track_line", rumbo, coord, valor, max_cm[, vel]): seguir la recta del mapa coord=valor
+        # (p. ej. "y", 18.0 con rumbo 0 = hacia el este a esa altura) hasta que las sondas
+        # centrales vean una línea. Absorbe el error a lo largo y corrige el lateral.
+        speed = val(step[5]) if len(step) > 5 else cfg.P["v_slow"]
+        motion.turn_to(map_target(step[1]))
+        x, y, _ = odo.pose()
+        if step[2] == "x":
+            x = step[3]
+        else:
+            y = step[3]
+        return odo.track(x, y, step[1], speed, timeout=2.0 + val(step[4]) / 5.0,
+                         max_cm=val(step[4]), stop=motion.on_line)
+    if kind == "goto":
+        # ("goto", x, y[, vel]): ir a ese punto del mapa con odometría encoders + giroscopio
+        speed = val(step[3]) if len(step) > 3 else cfg.P["v_slow"]
+        return odo.goto(step[1], step[2], speed)
     if kind == "edge":
         # ("edge", color, vel, max_cm[, rumbo]): recto hasta salir de la zona de ese color
         target = map_target(step[4]) if len(step) > 4 else None

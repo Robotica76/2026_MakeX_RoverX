@@ -54,13 +54,20 @@ def now():
     return cyberpi.timer.get()
 
 
+_on_wait = []            # funciones que se llaman en cada espera (p. ej. odometry.update)
+
+
 def wait(s):
+    for f in _on_wait:
+        f()
     time.sleep(s)
 
 
 # ---------------------------------------------------------------- motores
 _last_cmd = [0.0, 0.0]
 _last_t = 0.0
+_boost = 0.0             # potencia extra de la asistencia de subida
+_last_odo = 0.0
 
 
 def _tip_guard(left, right):
@@ -77,9 +84,23 @@ def _tip_guard(left, right):
     # Se limita solo la potencia COMÚN (el avance); la diferencia entre orugas (la dirección)
     # queda libre: limitarla también frenaba las correcciones de rumbo y en la escalera una oruga
     # se salía de su tramo (lo mostró el simulador).
+    global _boost, _last_odo
     mean = (left + right) / 2.0
     diff = (left - right) / 2.0
     prev = (_last_cmd[0] + _last_cmd[1]) / 2.0
+    odo = odo_abs()
+    v = (odo - _last_odo) / dt if dt > 0.001 else 0.0
+    _last_odo = odo
+    if pitch() >= cfg.P["tip_pitch"] and mean > 0:
+        # asistencia de subida: si con potencia hacia adelante el robot casi no avanza o se
+        # resbala hacia atrás, la potencia sube de a poco (no se queda parado en la pendiente)
+        if v < cfg.P["slope_min_v"]:
+            _boost = clamp(_boost + cfg.P["slope_boost"] * clamp(dt, 0.0, 0.2), 0, 60)
+        else:
+            _boost = clamp(_boost - cfg.P["slope_boost"] * clamp(dt, 0.0, 0.2), 0, 60)
+        mean = mean + _boost
+    else:
+        _boost = 0.0
     if abs(pitch()) >= cfg.P["tip_pitch"]:
         step = cfg.P["tip_slew"] * clamp(dt, 0.0, 0.2)
         if abs(mean) > abs(prev) + step:
@@ -111,6 +132,13 @@ def _encoder_deg():
     a = cfg.LEFT_SIGN * mbot2.EM_get_angle("EM1")
     b = cfg.RIGHT_SIGN * mbot2.EM_get_angle("EM2")
     return (a + b) / 2
+
+
+def tracks_cm():
+    """(izquierda, derecha): avance de cada oruga en cm desde el arranque, con signo."""
+    k = geo.cm_per_deg()
+    return (cfg.LEFT_SIGN * mbot2.EM_get_angle("EM1") * k,
+            cfg.RIGHT_SIGN * mbot2.EM_get_angle("EM2") * k)
 
 
 def reset_odometer():
