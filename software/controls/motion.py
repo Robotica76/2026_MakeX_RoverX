@@ -71,8 +71,12 @@ def straight_until(cond, speed=None, timeout=5.0, target=None):
     return False
 
 
-def straight(cm, speed=None, timeout=None):
-    """Avanza (cm > 0) o retrocede (cm < 0) una distancia medida con encoders."""
+def straight(cm, speed=None, timeout=None, target=None):
+    """Avanza (cm > 0) o retrocede (cm < 0) una distancia medida con encoders.
+
+    target: rumbo (hal.heading) que se sostiene con el giroscopio. Sin target se sostiene el
+    rumbo con el que empezó; con target, el error del giro anterior y los golpes del piso se
+    corrigen durante el avance."""
     if speed is None:
         speed = cfg.P["v_straight"]
     speed = abs(speed) * sign(cm)
@@ -80,7 +84,7 @@ def straight(cm, speed=None, timeout=None):
         timeout = 1.0 + abs(cm) / 8.0
     hal.reset_odometer()
     goal = abs(cm)
-    return straight_until(lambda: abs(hal.odometer_cm()) >= goal, speed, timeout)
+    return straight_until(lambda: abs(hal.odometer_cm()) >= goal, speed, timeout, target)
 
 
 def climb(speed=None, timeout=None, extra_cm=None):
@@ -122,11 +126,15 @@ def stairs():
     return climb(cfg.P["v_stairs"], cfg.STAIRS_TIMEOUT_S)
 
 
-def spin_to_line(direction=1, timeout=3.0):
-    """Gira en el lugar (1 = derecha, -1 = izquierda) hasta que las sondas centrales vean línea."""
+def spin_to_line(direction=1, timeout=3.0, leave=True):
+    """Gira en el lugar (1 = derecha, -1 = izquierda) hasta que las sondas centrales vean línea.
+
+    leave=True: si ya está sobre una línea, primero sale de ella (para buscar OTRA línea).
+    leave=False: si ya ve la línea, termina (después de un giro en un cruce las sondas, que van
+    cerca del centro de giro, ya quedan sobre la línea nueva)."""
     t0 = hal.now()
     # salir primero de la línea actual si ya estamos encima
-    while hal.now() - t0 < timeout * 0.3:
+    while leave and hal.now() - t0 < timeout * 0.3:
         b = hal.line_bits()
         if not (b["L1"] or b["R1"]):
             break
@@ -145,6 +153,23 @@ def spin_to_line(direction=1, timeout=3.0):
     return False
 
 
+def on_line():
+    b = hal.line_bits()
+    return b["L1"] or b["R1"]
+
+
+def seek_line(speed=None, max_cm=60, target=None):
+    """Avanza recto (con giroscopio) hasta que las sondas centrales vean una línea."""
+    if speed is None:
+        speed = cfg.P["v_slow"]
+    hal.reset_odometer()
+    t = 1.0 + max_cm / 8.0
+
+    def cond():
+        return on_line() or abs(hal.odometer_cm()) >= max_cm
+    return straight_until(cond, speed, t, target) and on_line()
+
+
 def detour(side=None):
     """Rodea un obstáculo fijo (torre, misión 10) y vuelve a buscar la línea.
     side: -1 = por la izquierda, 1 = por la derecha. Distancias desde geometry.py."""
@@ -158,12 +183,9 @@ def detour(side=None):
     ok = ok and turn(-90 * side)
     if not ok:
         return False
-
-    def on_line():
-        b = hal.line_bits()
-        return b["L1"] or b["R1"]
-
     if not straight_until(on_line, cfg.P["v_slow"], timeout=4.0):
         return False
     straight(geo.turn_advance(), cfg.P["v_slow"])   # centro de giro sobre la línea
-    return spin_to_line(-side)
+    # quedó perpendicular a la línea; para seguir en el rumbo original se gira hacia el mismo
+    # lado del rodeo (antes giraba al revés y regresaba hacia el obstáculo: lo mostró el simulador)
+    return spin_to_line(side, leave=False)

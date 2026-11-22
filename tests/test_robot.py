@@ -218,7 +218,7 @@ def test_turn_at_junction_centers_rotation_point(monkeypatch):
     moves = []
     monkeypatch.setattr(motion, "straight", lambda cm, speed=None, timeout=None: moves.append(cm) or True)
     monkeypatch.setattr(motion, "turn", lambda deg, timeout=None: True)
-    monkeypatch.setattr(motion, "spin_to_line", lambda d, timeout=3.0: True)
+    monkeypatch.setattr(motion, "spin_to_line", lambda d, timeout=3.0, leave=True: True)
     lf.last_junction = ("X", hal.odo_abs() - 1.0)
     assert lf.turn_at_junction(90)
     assert moves[0] == pytest.approx(geo.turn_advance() - 1.0, abs=0.05)
@@ -321,7 +321,7 @@ def test_abort_button_stops_runner(monkeypatch):
 def test_all_mission_steps_are_known_and_params_exist():
     known = {"line", "jturn", "center", "straight", "turn", "spin", "approach_ped", "approach_obj",
              "retreat", "to_tower", "climb", "stairs", "claw", "arm", "hold", "detour", "cards",
-             "drop_red", "stop_in", "wait"}
+             "drop_red", "stop_in", "wait", "seek", "ref", "head", "drive"}
     for m in ms.MISSIONS:
         for s in m["steps"]:
             assert s[0] in known, (m["id"], s)

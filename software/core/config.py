@@ -48,16 +48,16 @@ P = {
 
     # --- brazo de paralelogramo (MEDIR). Altura = altura del pivote + largo * sen(ángulo)
     "arm_pivot_fwd": 10.0,   # TODO(medir) referencia -> eje del servo del brazo (horizontal)
-    "arm_pivot_h": 8.0,      # TODO(medir) altura del eje del servo del brazo sobre el piso
-    "arm_len": 7.0,          # TODO(medir) largo de las barras del paralelogramo, eje a eje
+    "arm_pivot_h": 10.0,     # TODO(medir) altura del eje del servo del brazo sobre el piso
+    "arm_len": 9.0,          # TODO(medir) largo de las barras del paralelogramo, eje a eje
     "arm_grip_dx": 3.0,      # TODO(medir) del eje del extremo del brazo al centro de la garra (horizontal)
-    "arm_grip_dz": -2.0,     # TODO(medir) del eje del extremo del brazo al centro de la garra (vertical, - = abajo)
+    "arm_grip_dz": -1.0,     # TODO(medir) del eje del extremo del brazo al centro de la garra (vertical, - = abajo)
     "claw_tip": 3.0,         # TODO(medir) del centro de la garra a su punta delantera
     "arm_zero": 90,          # TODO(calibrar) ángulo del servo con el brazo HORIZONTAL
     "arm_dir": -1,           # TODO(calibrar) +1 si subir el ángulo sube el brazo, -1 si lo baja
     "h_floor": 2.5,          # altura de agarre: cubo/pelota en el piso
     "h_pedestal": 12.5,      # sobre el pedestal (10 cm + medio cubo)
-    "h_carry": 17.0,         # transporte (>= 5 cm sobre la base)
+    "h_carry": 17.5,         # transporte: base del cubo >= 5 cm sobre el pedestal (10 + 5 + 2.5)
     "h_bar": 12.0,           # barra de pelotas (10 cm)
 
     # --- garra (CALIBRAR)
@@ -69,6 +69,7 @@ P = {
     "line_mode": 1,          # 1 = analógico calibrado (recomendado), 0 = get_offset_track
     "dark_th": 0.45,         # 0..1 desde qué oscuridad una sonda "ve" línea
     "cross_win": 4.0,        # cm de avance en los que cuentan las dos sondas exteriores
+    "cross_th": 0.8,         # 0..1 oscuridad de una exterior para contar un cruce (> verde)
     "kp": 0.45,
     "kd": 1.5,
     "ki": 0.0,
@@ -94,14 +95,15 @@ P = {
     "ramp_margin": 3.0,      # cm extra para quedar "completamente dentro"
 
     # --- medidas de la PISTA (MEDIR en la pista de prueba; sin ultrasónico son la referencia)
-    "ped1_from_cross": 12.0, # nivel 1: del cruce frente al cubo al centro del pedestal
-    "ped2_from_cross": 12.0, # nivel 2: del cruce antes del pedestal al centro del pedestal
-    "ball_ped_dist": 15.0,   # nivel 3: del centro de la línea (en la marca roja) al centro del pedestal
-    "tower_from_edge": 25.0, # nivel 4: del borde de salida de la zona verde a la cara de la torre
+    # TODO(medir en pista): valores sacados del plano del reglamento (simulation/arena.py)
+    "ped1_from_cross": 11.1, # nivel 1: del cruce frente al cubo al centro del pedestal
+    "ped2_from_cross": 11.1, # nivel 2: del cruce antes del pedestal al centro del pedestal
+    "ball_ped_dist": 23.6,   # nivel 3: del centro de la línea (en la marca roja) al centro del pedestal
+    "tower_from_edge": 7.5,  # nivel 4: del borde de salida de la zona verde a la cara de la torre
     "tower_size": 10.0,
     "side_margin": 4.0,      # holgura lateral al rodear
-    "bar_side": -1,          # -1 = barra de pelotas a la izquierda de la línea, 1 = derecha
-    "bar_reach": 10.0,       # avance lateral hasta la barra
+    "bar_side": 1,           # -1 = barra de pelotas a la izquierda de la línea, 1 = derecha
+    "bar_reach": 8.2,        # avance desde la línea para dejar la garra sobre el agujero
 
     # --- colores
     "color_mode": 0,         # 0 = nombre del sensor (get_color_sta), 1 = RGB más cercano
@@ -111,6 +113,7 @@ P = {
 TUNE = [
     ("Linea", "kp", 0.05, 0, 3), ("Linea", "kd", 0.1, 0, 10), ("Linea", "v_line", 5, 10, 100),
     ("Linea", "dark_th", 0.05, 0.1, 0.9), ("Linea", "cross_win", 0.5, 1, 15),
+    ("Linea", "cross_th", 0.05, 0.3, 1),
     ("Linea", "line_mode", 1, 0, 1), ("Linea", "green", 1, 0, 1),
     ("Geometria", "ref_rot_fwd", 0.5, -20, 20), ("Geometria", "sensor_fwd", 0.5, -10, 40),
     ("Geometria", "card_probe_fwd", 0.5, -10, 40), ("Geometria", "track_len", 0.5, 5, 50),

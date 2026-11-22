@@ -139,11 +139,19 @@ def darkness():
 
 
 def offset_from(dk):
-    """Centro ponderado de la oscuridad -> -100..100 (función pura, probada en PC)."""
+    """Centro ponderado de la oscuridad -> -100..100 (función pura, probada en PC).
+
+    Se resta el fondo (la sonda más clara): sobre una zona oscura (azul, verde) todas las sondas
+    suben igual y la línea se perdía en el promedio (la curva del nivel 3 empieza dentro de la
+    zona azul; lo mostró el simulador)."""
+    base = 1.0
+    for i in range(4):
+        if dk[PROBES[i]] < base:
+            base = dk[PROBES[i]]
     total = 0
     acc = 0
     for i in range(4):
-        d = dk[PROBES[i]]
+        d = dk[PROBES[i]] - base
         total += d
         acc += d * (i - 1.5)
     if total < 0.05:
@@ -165,6 +173,10 @@ def line_read():
         bits = {}
         for pr in PROBES:
             bits[pr] = dk[pr] >= th
+        # para los cruces, las exteriores piden negro "fuerte": las marcas verdes junto a la
+        # línea también son oscuras y adelantaban el cruce (lo mostró el simulador)
+        bits["L2x"] = dk["L2"] >= cfg.P["cross_th"]
+        bits["R2x"] = dk["R2"] >= cfg.P["cross_th"]
         return offset_from(dk), bits
     return line_offset(), line_bits()
 

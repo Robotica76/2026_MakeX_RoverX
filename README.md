@@ -26,6 +26,7 @@ fin -> A = control manual (alianza)  ·  B = volver al menú
 | [software/robot](software/robot) | `rover_x_2026.py`, programa de competencia |
 | [tools/robot/api_check.py](tools/robot/api_check.py) | Programa de prueba y calibración para el robot |
 | [tools/scripts/bundle_for_mblock.py](tools/scripts/bundle_for_mblock.py) | Junta todos los módulos en un solo archivo para mBlock |
+| [simulation](simulation/README.md) | Simulador del área automática: pista del reglamento, física, juez, Monte Carlo y reproducción HTML |
 | [tests](tests) | Pruebas en PC con `cyberpi` / `mbot2` / `mbuild` / `gamepad` falsos |
 | [docs](docs) | [Resumen del reglamento](docs/reglamento.md), [hoja de medidas del robot](docs/medidas_robot.md), [geometría y ajustes en pista](docs/geometria.md), [estrategia](docs/estrategia.md), [API del mBot2](docs/api_mbot2.md), [control manual](docs/control_manual.md) |
 | [resources/reglamento](resources/reglamento) | PDF del reglamento y vistas de la arena |
@@ -40,6 +41,12 @@ python3 -m venv .venv && .venv/bin/pip install pytest
 
 ```bash
 .venv/bin/python -m pytest -q tests
+```
+
+Simulador del autónomo (corre el programa real en la pista virtual y abre la reproducción):
+
+```bash
+python3 simulation/run_auto.py
 ```
 
 Cargar en el robot: generar un solo archivo y pegarlo en el editor de Python de mBlock

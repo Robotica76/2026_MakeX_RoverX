@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rover X · simulador</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #ffffff; --ink: #1d2330; --muted: #667085; --line: #d9dde3;
+    --ok: #1a7f37; --bad: #c62828; --accent: #2266cc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14171c; --panel: #1d2128; --ink: #e6e8eb; --muted: #9aa3ad; --line: #333a44;
+      --ok: #4ac26b; --bad: #ff6b6b; --accent: #6ea8ff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: baseline; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .meta { color: var(--muted); font-size: 13px; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 12px; padding: 0 16px 16px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  canvas { width: 100%; display: block; border-radius: 6px; background: #c8ccd2; touch-action: none; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+  .controls input[type=range] { flex: 1 1 200px; }
+  button, select { font: inherit; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line);
+                   background: var(--bg); color: var(--ink); cursor: pointer; }
+  .status { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-variant-numeric: tabular-nums; }
+  .status dt { color: var(--muted); }
+  .status dd { margin: 0; }
+  .led { display: inline-block; width: 14px; height: 14px; border-radius: 50%; vertical-align: -2px;
+         border: 1px solid var(--line); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 3px 4px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; }
+  td.ok { color: var(--ok); font-weight: 600; } td.bad { color: var(--bad); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  h2 { font-size: 14px; margin: 14px 0 6px; }
+  h2:first-child { margin-top: 0; }
+  #events { max-height: 260px; overflow: auto; font-size: 12px; font-variant-numeric: tabular-nums; }
+  #events div { padding: 2px 4px; border-radius: 4px; cursor: pointer; }
+  #events div:hover { background: var(--bg); }
+  #events div.past { color: var(--muted); }
+  #events .judge { color: var(--ok); } #events .fall { color: var(--bad); font-weight: 600; }
+  .notes { color: var(--bad); font-size: 13px; margin: 6px 0 0; padding-left: 18px; }
+  .legend { color: var(--muted); font-size: 12px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Rover X · simulador del autónomo</h1>
+  <span class="meta" id="meta"></span>
+</header>
+<main>
+  <section class="card">
+    <canvas id="cv" width="1200" height="620"></canvas>
+    <div class="controls">
+      <button id="play">▶ Reproducir</button>
+      <select id="speed">
+        <option value="1">1×</option><option value="2">2×</option><option value="4" selected>4×</option>
+        <option value="10">10×</option><option value="25">25×</option>
+      </select>
+      <input id="slider" type="range" min="0" max="0" value="0" step="1">
+      <span id="clock">0.0 s</span>
+      <label><input type="checkbox" id="follow"> seguir al robot</label>
+    </div>
+    <div class="legend">Vista superior. Gris más oscuro = nivel más alto. Rastro azul = recorrido.
+      Puntos al frente = sondas del Quad RGB. Rectángulo naranja = garra (con su altura).</div>
+  </section>
+  <aside class="card">
+    <h2>Estado</h2>
+    <dl class="status">
+      <dt>Misión</dt><dd id="s_m">-</dd>
+      <dt>Tiempo</dt><dd id="s_t">-</dd>
+      <dt>Posición</dt><dd id="s_p">-</dd>
+      <dt>Altura / pitch</dt><dd id="s_z">-</dd>
+      <dt>Garra</dt><dd id="s_c">-</dd>
+      <dt>LEDs</dt><dd><span class="led" id="s_led"></span></dd>
+    </dl>
+    <h2>Juez vs. programa</h2>
+    <table id="results"><thead><tr><th>M</th><th>Misión</th><th>Programa</th><th>Juez</th><th class="num">Pts</th></tr></thead><tbody></tbody></table>
+    <ul class="notes" id="notes"></ul>
+    <h2>Eventos</h2>
+    <div id="events"></div>
+  </aside>
+</main>
+<script>
+const D = /*__DATA__*/null;
+const A = D.arena, F = D.frames, R = D.robot;
+const cv = document.getElementById("cv"), cx = cv.getContext("2d");
+const COL = { red: "#c62828", yellow: "#e8c400", green: "#128a3a", blue: "#1d8fc4", cyan: "#3cc8dc",
+              purple: "#8e44ad", navy: "#3c3c8c", magenta: "#d020c8", white: "#ffffff" };
+const ZCOL = { 3: COL.red, 4: COL.yellow, 5: COL.green, 6: COL.blue, 7: COL.navy };
+let i = 0, playing = false, last = 0, zoom = null;
+
+const p = D.params;
+document.getElementById("meta").textContent =
+  `nivel ${p.level} · semilla ${p.seed} · ruido ${p.noise} · línea ${p.line_w} cm · tarjetas: ${p.cards.join(", ")}`;
+
+// ------------------------------------------------------------ transformación cm -> canvas
+function view() {
+  if (document.getElementById("follow").checked && F.length) {
+    const f = F[i], w = 90, h = w * cv.height / cv.width;
+    return { x0: f[1] - w / 2, y0: f[2] - h / 2, w, h };
+  }
+  return { x0: -2, y0: -2, w: A.w + 4, h: A.h + 4 };
+}
+let V = view(), K = 1;
+function T(x, y) { return [(x - V.x0) * K, cv.height - (y - V.y0) * K]; }
+function rect(r, fill, stroke, lw) {
+  const [a, b] = T(r[0], r[3]), [c, d] = T(r[2], r[1]);
+  if (fill) { cx.fillStyle = fill; cx.fillRect(a, b, c - a, d - b); }
+  if (stroke) { cx.strokeStyle = stroke; cx.lineWidth = lw || 1; cx.strokeRect(a, b, c - a, d - b); }
+}
+function poly(pts, fill, stroke, lw) {
+  cx.beginPath();
+  pts.forEach((q, k) => { const [x, y] = T(q[0], q[1]); k ? cx.lineTo(x, y) : cx.moveTo(x, y); });
+  cx.closePath();
+  if (fill) { cx.fillStyle = fill; cx.fill(); }
+  if (stroke) { cx.strokeStyle = stroke; cx.lineWidth = lw || 1; cx.stroke(); }
+}
+function rpoly(x, y, yaw, len, wid, fwd, lat) {
+  const c = Math.cos(yaw * Math.PI / 180), s = Math.sin(yaw * Math.PI / 180);
+  fwd = fwd || 0; lat = lat || 0;
+  const ox = x + c * fwd - s * lat, oy = y + s * fwd + c * lat;
+  return [[len / 2, wid / 2], [-len / 2, wid / 2], [-len / 2, -wid / 2], [len / 2, -wid / 2]]
+    .map(([a, b]) => [ox + c * a - s * b, oy + s * a + c * b]);
+}
+function text(t, x, y, size, color, align) {
+  const [a, b] = T(x, y);
+  cx.fillStyle = color || "#333"; cx.font = `${size || 11}px sans-serif`;
+  cx.textAlign = align || "left"; cx.fillText(t, a, b);
+}
+
+// ------------------------------------------------------------ pista
+function drawArena() {
+  const shade = { 1: "#eceef0", 2: "#dfe2e6", 3: "#d2d6db", 4: "#c4c9cf" };
+  for (const k of ["1", "2", "3", "4"]) rect(A.levels[k], shade[k]);
+  rect(A.ramps[0], "#a9adb3"); rect(A.ramps[1], "#fbfbfb", "#888");
+  for (const k of ["1", "2", "3", "4"]) {
+    const r = A.levels[k];
+    text(`Nivel ${k} · ${A.z[k]} cm`, r[0] + 1.5, r[3] - 3.5, 12 * K / 4.6, "#6a7380");
+  }
+  // escalera: dos tramos con sus peldaños
+  for (const f of A.flights) {
+    rect(f, "#b9bfd8", "#555");
+    for (let s = 1; s < 8; s++) {
+      const x = f[0] + (f[2] - f[0]) * s / 8;
+      const [a, b] = T(x, f[1]), [c, d] = T(x, f[3]);
+      cx.strokeStyle = "#555"; cx.lineWidth = 1; cx.beginPath(); cx.moveTo(a, b); cx.lineTo(c, d); cx.stroke();
+    }
+  }
+  for (const z of A.zones) rect(z.rect, ZCOL[z.code]);
+  for (const g of A.green_marks) rect(g, COL.green);
+  for (const m of A.red_marks) poly(m, COL.red);
+  // líneas
+  cx.strokeStyle = "#111"; cx.lineWidth = A.line_w * K; cx.lineJoin = "round"; cx.lineCap = "butt";
+  for (const l of A.lines) {
+    cx.beginPath();
+    l.forEach((q, k) => { const [x, y] = T(q[0], q[1]); k ? cx.lineTo(x, y) : cx.moveTo(x, y); });
+    cx.stroke();
+  }
+  for (const c of A.cards) rect(c.rect, COL[c.color], "#222", 1);
+  cx.setLineDash([4, 3]); rect(A.dotted, null, "#333", 1.2); cx.setLineDash([]);
+  rect(A.m1_zone, null, "rgba(34,102,204,.5)", 1);
+  rect(A.tope, "rgba(120,120,120,.55)");
+  for (const o of A.obstacles) rect(o, "rgba(140,110,200,.45)", "rgba(90,60,150,.8)");
+  cx.lineCap = "round";
+  for (const w of A.walls) {
+    const [a, b] = T(w[0][0], w[0][1]), [c, d] = T(w[1][0], w[1][1]);
+    cx.strokeStyle = "#4a4f57"; cx.lineWidth = Math.max(2, 1.2 * K);
+    cx.beginPath(); cx.moveTo(a, b); cx.lineTo(c, d); cx.stroke();
+  }
+  for (const [name, pr] of Object.entries(A.props)) {
+    rect(pr.rect, name === "bar" ? COL.magenta : COL.magenta, "#5a0f55", 1);
+    const r = pr.rect;
+    text(name === "tower" ? "torre" : name === "bar" ? "barra" : "", (r[0] + r[2]) / 2, (r[1] + r[3]) / 2 - 1, 10, "#fff", "center");
+  }
+  for (const h of A.holes) {
+    const [a, b] = T(h[0], h[1]);
+    cx.fillStyle = "#fff"; cx.beginPath(); cx.arc(a, b, 1.25 * K, 0, 7); cx.fill();
+  }
+}
+
+// ------------------------------------------------------------ robot y objetos
+function drawFrame() {
+  const f = F[i];
+  // rastro
+  cx.lineWidth = Math.max(1, 0.5 * K); cx.lineCap = "round";
+  cx.strokeStyle = "rgba(34,102,204,.18)"; cx.beginPath();
+  F.forEach((q, k) => { const [x, y] = T(q[1], q[2]); k ? cx.lineTo(x, y) : cx.moveTo(x, y); });
+  cx.stroke();
+  cx.strokeStyle = "rgba(34,102,204,.85)"; cx.beginPath();
+  for (let k = 0; k <= i; k++) { const [x, y] = T(F[k][1], F[k][2]); k ? cx.lineTo(x, y) : cx.moveTo(x, y); }
+  cx.stroke();
+  // prisma
+  const pr = f[11];
+  const ph = 3.2;
+  poly(rpoly(pr[0], pr[1], 0, 2 * ph, 2 * ph), pr[2] ? "rgba(232,196,0,.35)" : COL.yellow, "#6b5a00", 1.5);
+  // robot
+  const [x, y, yaw] = [f[1], f[2], f[3]];
+  poly(rpoly(x, y, yaw, R.track_len, R.robot_w), "rgba(79,195,247,.75)", "#0b4f6c", 1.5);
+  const off = (R.robot_w - R.belt_w) / 2;
+  for (const s of [-1, 1]) poly(rpoly(x, y, yaw, R.track_len, R.belt_w, 0, s * off), "#2a2f36");
+  // frente y centro de giro
+  const [ax, ay] = T(x, y);
+  cx.fillStyle = "#0b4f6c"; cx.beginPath(); cx.arc(ax, ay, Math.max(2, 0.6 * K), 0, 7); cx.fill();
+  // sondas
+  const c = Math.cos(yaw * Math.PI / 180), s = Math.sin(yaw * Math.PI / 180);
+  const sf = R.sensor_fwd - R.ref_rot_fwd;
+  for (let k = 0; k < 4; k++) {
+    const lat = -(k - 1.5) * R.probe_pitch;
+    const [qx, qy] = T(x + c * sf - s * lat, y + s * sf + c * lat);
+    cx.fillStyle = "#ff3d00"; cx.beginPath(); cx.arc(qx, qy, Math.max(1.5, 0.35 * K), 0, 7); cx.fill();
+  }
+  // garra
+  const cl = f[13];
+  poly(rpoly(cl[0], cl[1], yaw, R.claw_tip + 2, 6), f[7] ? "rgba(255,140,0,.9)" : "rgba(255,140,0,.35)", "#b35c00", 1.5);
+  text(`${f[6].toFixed(1)} cm`, cl[0], cl[1] + 4.5, 11, "#b35c00", "center");
+  // cubo y pelota
+  const cu = f[9];
+  poly(rpoly(cu[0], cu[1], 0, 5, 5), "#f5d000", "#5c4a00", 1.5);
+  const b = f[10], [bx, by] = T(b[0], b[1]);
+  cx.fillStyle = "#fff"; cx.strokeStyle = "#333"; cx.lineWidth = 1.2;
+  cx.beginPath(); cx.arc(bx, by, 1.5 * K, 0, 7); cx.fill(); cx.stroke();
+}
+
+function draw() {
+  V = view(); K = cv.width / V.w;
+  cx.clearRect(0, 0, cv.width, cv.height);
+  drawArena();
+  if (F.length) drawFrame();
+  updatePanel();
+}
+
+// ------------------------------------------------------------ panel
+const ev = document.getElementById("events");
+D.events.forEach(([t, e], k) => {
+  const d = document.createElement("div");
+  d.textContent = `${t.toFixed(1).padStart(6)} s  ${e}`;
+  if (e.startsWith("JUEZ")) d.className = "judge";
+  if (e.startsWith("CAIDA") || e.startsWith("ERROR")) d.className = "fall";
+  d.dataset.t = t;
+  d.onclick = () => { seekTime(t); };
+  ev.appendChild(d);
+});
+function seekTime(t) {
+  let k = F.findIndex(f => f[0] >= t); if (k < 0) k = F.length - 1;
+  i = k; slider.value = i; draw();
+}
+function updatePanel() {
+  if (!F.length) return;
+  const f = F[i];
+  document.getElementById("s_m").textContent = f[12] || "-";
+  document.getElementById("s_t").textContent = `${f[0].toFixed(2)} s`;
+  document.getElementById("clock").textContent = `${f[0].toFixed(1)} / ${F[F.length - 1][0].toFixed(1)} s`;
+  document.getElementById("s_p").textContent = `x ${f[1].toFixed(1)}  y ${f[2].toFixed(1)} cm  rumbo ${f[3].toFixed(0)}°`;
+  document.getElementById("s_z").textContent = `${f[4].toFixed(1)} cm  ·  ${f[5].toFixed(1)}°`;
+  document.getElementById("s_c").textContent = `${f[7] ? "cerrada" : "abierta"} a ${f[6].toFixed(1)} cm`;
+  const l = f[8]; document.getElementById("s_led").style.background = `rgb(${l[0]},${l[1]},${l[2]})`;
+  for (const d of ev.children) d.classList.toggle("past", +d.dataset.t <= f[0]);
+}
+const rep = D.report, names = Object.fromEntries(D.missions.map(m => [m.id, m.name]));
+const tb = document.querySelector("#results tbody");
+for (const m of rep.missions) {
+  const pg = rep.program[m.id];
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td>${m.id}</td><td>${names[m.id]}</td>` +
+    `<td class="${pg === undefined ? "" : pg ? "ok" : "bad"}">${pg === undefined ? "-" : pg ? "OK" : "falla"}</td>` +
+    `<td class="${m.ok ? "ok" : "bad"}">${m.ok ? "OK" : "no"}</td><td class="num">${m.pts}</td>`;
+  if (m.t != null) tr.style.cursor = "pointer", tr.onclick = () => seekTime(m.t);
+  tb.appendChild(tr);
+}
+const tr = document.createElement("tr");
+tr.innerHTML = `<th colspan="4">Total juez (el programa estima ${rep.program_points})</th><th class="num">${rep.total}</th>`;
+tb.appendChild(tr);
+const notes = document.getElementById("notes");
+for (const n of rep.notes.concat(rep.warnings).concat(rep.error ? ["Error del programa (ver eventos)"] : [])) {
+  const li = document.createElement("li"); li.textContent = n; notes.appendChild(li);
+}
+
+// ------------------------------------------------------------ reproducción
+const slider = document.getElementById("slider"), playBtn = document.getElementById("play");
+slider.max = Math.max(0, F.length - 1);
+slider.oninput = () => { i = +slider.value; draw(); };
+playBtn.onclick = () => {
+  playing = !playing;
+  if (playing && i >= F.length - 1) i = 0;
+  playBtn.textContent = playing ? "❚❚ Pausa" : "▶ Reproducir"; last = performance.now();
+  requestAnimationFrame(tick);
+};
+document.getElementById("follow").onchange = draw;
+function tick(now) {
+  if (!playing) return;
+  const sp = +document.getElementById("speed").value;
+  const t = F[i][0] + (now - last) / 1000 * sp; last = now;
+  while (i < F.length - 1 && F[i + 1][0] <= t) i++;
+  slider.value = i; draw();
+  if (i >= F.length - 1) { playing = false; playBtn.textContent = "▶ Reproducir"; return; }
+  requestAnimationFrame(tick);
+}
+document.addEventListener("keydown", e => {
+  if (e.key === " ") { e.preventDefault(); playBtn.click(); }
+  if (e.key === "ArrowRight") { i = Math.min(F.length - 1, i + 20); slider.value = i; draw(); }
+  if (e.key === "ArrowLeft") { i = Math.max(0, i - 20); slider.value = i; draw(); }
+});
+function fit() {
+  const w = cv.clientWidth * (window.devicePixelRatio || 1);
+  cv.width = w; cv.height = w * (A.h + 4) / (A.w + 4); draw();
+}
+window.addEventListener("resize", fit);
+fit();
+</script>
+</body>
+</html>

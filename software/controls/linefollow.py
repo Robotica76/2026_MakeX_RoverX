@@ -24,6 +24,7 @@ _clear_since = None      # odometría desde que ambas exteriores están en blanc
 _armed = True
 last_junction = None     # (tipo, odometría absoluta del inicio del cruce)
 last_edge = None         # odometría absoluta al salir de una zona de color (leave_color)
+_after_turn = False      # tras girar en un cruce, el siguiente seguimiento empieza desarmado
 
 
 def reset():
@@ -71,7 +72,9 @@ def sees_line(bits):
 def track_junction(bits, odo):
     """Actualiza el rastreador con una lectura. Devuelve "X", "L", "R" al cerrar un cruce, o None."""
     global _win_start, _seen_l, _seen_r, _clear_since, _armed, last_junction
-    outer = bits["L2"] or bits["R2"]
+    left = bits.get("L2x", bits["L2"])
+    right = bits.get("R2x", bits["R2"])
+    outer = left or right
     if not _armed:
         # esperar a salir del cruce anterior: 1.5 cm con las exteriores en blanco
         if outer:
@@ -84,8 +87,8 @@ def track_junction(bits, odo):
     if outer:
         if _win_start is None:
             _win_start = odo
-        _seen_l = _seen_l or bits["L2"]
-        _seen_r = _seen_r or bits["R2"]
+        _seen_l = _seen_l or left
+        _seen_r = _seen_r or right
     if _win_start is None:
         return None
     if (_seen_l and _seen_r) or odo - _win_start >= cfg.P["cross_win"]:
@@ -123,8 +126,11 @@ def turn_at_junction(deg):
     if deg == 0:
         return True
     motion.turn(deg * 0.85)                    # el último tramo lo termina spin_to_line
-    ok = motion.spin_to_line(1 if deg > 0 else -1, timeout=2.0)
+    ok = motion.spin_to_line(1 if deg > 0 else -1, timeout=2.0, leave=False)
     reset()
+    # el otro brazo del cruce sigue bajo las sondas: no contarlo como un cruce nuevo
+    global _after_turn
+    _after_turn = True
     return ok
 
 
@@ -133,10 +139,13 @@ def follow_until(cond, speed=None, timeout=10.0, green=False):
 
     junction es "X"/"L"/"R" en el ciclo en que se cierra un cruce, si no None.
     Si la línea se pierde más de P["lost_s"] segundos, devuelve False."""
-    global _pending_turn
+    global _pending_turn, _after_turn, _armed
     if speed is None:
         speed = cfg.P["v_line"]
     reset()
+    if _after_turn:
+        _after_turn = False
+        _armed = False          # se arma tras 1.5 cm con las exteriores en blanco
     t0 = hal.now()
     lost_since = None
     while hal.now() - t0 < timeout:
@@ -197,9 +206,10 @@ def after_cm(cm):
 
 
 def leave_color(name, probes=("L1", "R1")):
-    """Verdadero cuando las sondas dejan de ver la zona de ese color (3 lecturas seguidas).
+    """Verdadero cuando las sondas, después de haber visto la zona de ese color, la dejan de ver
+    (3 lecturas seguidas).
     Guarda la odometría en last_edge: es la referencia para medir desde el borde de la zona."""
-    state = {"n": 0}
+    state = {"n": 0, "seen": False}
 
     def cond(bits, j):
         global last_edge
@@ -207,6 +217,10 @@ def leave_color(name, probes=("L1", "R1")):
         for pr in probes:
             if colors.read(pr) == name:
                 inside = True
+        if inside:
+            state["seen"] = True
+        if not state["seen"]:          # primero hay que entrar a la zona (p. ej. al subir una rampa)
+            return False
         state["n"] = 0 if inside else state["n"] + 1
         if state["n"] >= cfg.COLOR_CONFIRM:
             last_edge = hal.odo_abs()
@@ -223,9 +237,19 @@ def obstacle_within(cm):
     return cond
 
 
-def line_end():
+def line_end(cm=2.0):
+    """Verdadero cuando ninguna sonda ve línea durante `cm` de avance (en una curva cerrada la
+    línea se pierde un instante y no es el final; lo mostró el simulador)."""
+    state = {"since": None}
+
     def cond(bits, j):
-        return not sees_line(bits)
+        if sees_line(bits):
+            state["since"] = None
+            return False
+        odo = hal.odo_abs()
+        if state["since"] is None:
+            state["since"] = odo
+        return odo - state["since"] >= cm
     return cond
 
 

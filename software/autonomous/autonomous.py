@@ -16,12 +16,21 @@ import missions as ms
 cards = []               # [(color, odometría absoluta al detectarla)]
 results = []             # [(id, ok)]
 last_advance = 0         # cm del último acercamiento (para regresar lo mismo con "retreat")
+heading_ref = 0          # rumbo de mapa = hal.heading() + heading_ref (paso "ref")
 
 
 def reset_state():
-    global cards, results
+    """Todo lo que una corrida anterior pudo dejar (al relanzar el autónomo desde el menú sin
+    apagar el robot, una referencia vieja movía el primer giro; lo mostró el simulador)."""
+    global cards, results, last_advance, heading_ref
     cards = []
     results = []
+    last_advance = 0
+    heading_ref = 0
+    lf.reset()
+    lf.last_junction = None
+    lf.last_edge = None
+    lf._after_turn = False
 
 
 def val(x):
@@ -37,7 +46,8 @@ def make_cond(spec):
     if kind == "junction":
         return lf.at_junction(spec[1], spec[2])
     if kind == "color":
-        return lf.at_color(spec[1])
+        # las marcas de color van JUNTO a la línea: se revisan las cuatro sondas
+        return lf.at_color(spec[1], cfg.PROBES)
     if kind == "cm":
         return lf.after_cm(val(spec[1]))
     if kind == "leave":
@@ -141,7 +151,9 @@ def to_tower():
     if lf.last_edge is not None:
         traveled = hal.odo_abs() - lf.last_edge
     adv = geo.tower_advance(traveled)
-    if adv <= 0:
+    if adv < 0:                         # ya está más cerca de lo debido: retroceder recto
+        return motion.straight(adv, cfg.P["v_slow"])
+    if adv < 0.5:
         return True
     return lf.follow_until(lf.after_cm(adv), cfg.P["v_slow"], 8)
 
@@ -161,8 +173,32 @@ def run_step(step):
         return motion.straight(geo.turn_advance(), cfg.P["v_slow"])
     if kind == "turn":
         return motion.turn(step[1])
+    if kind == "ref":
+        # "ahora miro hacia step[1] grados de mapa" (0 = este, 90 = sur; positivo = horario).
+        # Se usa en una recta conocida para que los giros "head" no arrastren el error de rumbo.
+        global heading_ref
+        heading_ref = step[1] - hal.heading()
+        return True
+    if kind == "head":
+        return motion.turn_to(step[1] - heading_ref)
+    if kind == "drive":
+        # ("drive", rumbo, cm[, vel]): girar al rumbo de mapa y avanzar SOSTENIENDO ese rumbo
+        # con el IMU (zona de obstáculos: no se arrastra el error del giro)
+        target = step[1] - heading_ref
+        speed = val(step[3]) if len(step) > 3 else cfg.P["v_slow"]
+        motion.turn_to(target)
+        return motion.straight(val(step[2]), speed, target=target)
+    if kind == "seek":
+        speed = val(step[1]) if len(step) > 1 else cfg.P["v_slow"]
+        max_cm = val(step[2]) if len(step) > 2 else 60
+        target = None
+        if len(step) > 3:                      # rumbo de mapa opcional
+            target = step[3] - heading_ref
+            motion.turn_to(target)
+        return motion.seek_line(speed, max_cm, target)
     if kind == "spin":
         return motion.spin_to_line(step[1])
+
     if kind == "approach_ped":
         return approach_pedestal(step[1], step[2])
     if kind == "approach_obj":
