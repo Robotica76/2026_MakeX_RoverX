@@ -7,9 +7,6 @@
 import math
 import config as cfg
 
-PEDESTAL_HALF = 3.0      # pedestal de 6 x 6 cm
-
-
 def p(key):
     return cfg.P[key]
 
@@ -54,12 +51,28 @@ def turn_advance():
     return p("sensor_fwd")
 
 
-def pedestal_us_target(h):
-    """Lectura del ultrasónico a la que la garra (a la altura h) queda sobre el centro del pedestal."""
-    d = claw_reach(h) - PEDESTAL_HALF - p("us_fwd") + p("ped_gap")
-    if d < 3:
-        d = 3            # el ultrasónico no mide bien a menos de ~3 cm
-    return d
+def front_len():
+    """Del centro de giro a la punta delantera del robot."""
+    return p("robot_len") - p("rear_len")
+
+
+def reach_advance(target, h):
+    """Avance para que el punto de agarre (garra a la altura h) llegue a un objeto cuyo centro
+    está a `target` cm del centro de giro, en la dirección en la que mira el robot."""
+    return target - claw_reach(h)
+
+
+def pedestal_advance(h, from_cross, traveled):
+    """Sin ultrasónico: avance para dejar la garra sobre el centro de un pedestal que está a
+    `from_cross` cm de un cruce, cuando el robot ya avanzó `traveled` cm desde que las sondas
+    detectaron ese cruce (en ese momento el centro de giro estaba sensor_fwd atrás)."""
+    return from_cross - claw_reach(h) + p("sensor_fwd") - traveled
+
+
+def tower_advance(traveled):
+    """Avance (siguiendo la línea) hasta quedar a side_margin de la torre, medido desde que las
+    sondas salieron de la zona verde y ya se avanzaron `traveled` cm."""
+    return p("tower_from_edge") - front_len() - p("side_margin") + p("sensor_fwd") - traveled
 
 
 def ramp_extra():
@@ -78,8 +91,8 @@ def detour_out():
 
 
 def detour_pass():
-    """Avance paralelo para rebasar la torre por completo (desde donde se detectó)."""
-    return p("us_fwd") + p("tower_detect") + p("tower_size") + p("rear_len") + p("side_margin")
+    """Avance paralelo para rebasar la torre por completo, partiendo de side_margin antes de ella."""
+    return front_len() + p("tower_size") + p("rear_len") + 2 * p("side_margin")
 
 
 def card_to_center(card_odo, now_odo):

@@ -11,7 +11,7 @@
 #   3 Motores : A = drive_power(40, -40) 1 s. Debe AVANZAR. Muestra grados del encoder.
 #   4 Recta   : A = mbot2.straight(50). Medir con cinta y leer grados -> CM_PER_DEG.
 #   5 Servos  : A alterna s1/s2 entre 60 y 150 grados.
-#   6 Sonar   : distancia del ultrasónico 2.
+#   6 Sonar   : distancia del ultrasónico 2 (solo si se instala; el diseño actual no lo lleva).
 #   7 Gamepad : teclas y joysticks del Bluetooth Controller.
 
 import time
@@ -73,7 +73,10 @@ def show_page():
         label(3, "")
         label(4, "")
     elif p == "Sonar":
-        label(1, "dist %s cm" % mbuild.ultrasonic2.get(index=1))
+        try:
+            label(1, "dist %s cm" % mbuild.ultrasonic2.get(index=1))
+        except Exception:
+            label(1, "sin ultrasonico")
         label(2, "")
         label(3, "")
         label(4, "")

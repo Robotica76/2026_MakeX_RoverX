@@ -15,6 +15,7 @@ import missions as ms
 
 cards = []               # [(color, odometría absoluta al detectarla)]
 results = []             # [(id, ok)]
+last_advance = 0         # cm del último acercamiento (para regresar lo mismo con "retreat")
 
 
 def reset_state():
@@ -39,8 +40,10 @@ def make_cond(spec):
         return lf.at_color(spec[1])
     if kind == "cm":
         return lf.after_cm(val(spec[1]))
+    if kind == "leave":
+        return lf.leave_color(spec[1])
     if kind == "obstacle":
-        return lf.obstacle_within(val(spec[1]))
+        return lf.obstacle_within(val(spec[1]))       # solo con ultrasónico
     if kind == "end":
         return lf.line_end()
     if kind == "pitch":
@@ -113,10 +116,34 @@ def stop_in(color):
     return True
 
 
-def approach_pedestal(h):
-    target = geo.pedestal_us_target(val(h))
-    return motion.straight_until(lambda: 0 < hal.distance_cm() <= target,
-                                 cfg.P["v_slow"], 4.0)
+def _advance(cm):
+    global last_advance
+    last_advance = cm
+    return motion.straight(cm, cfg.P["v_slow"])
+
+
+def approach_pedestal(h, from_cross):
+    """Garra sobre el centro de un pedestal que está a from_cross cm del último cruce."""
+    traveled = 0
+    if lf.last_junction is not None:
+        traveled = hal.odo_abs() - lf.last_junction[1]
+    return _advance(geo.pedestal_advance(val(h), val(from_cross), traveled))
+
+
+def approach_object(h, dist):
+    """Garra sobre un objeto cuyo centro está a dist cm del centro de giro, al frente."""
+    return _advance(geo.reach_advance(val(dist), val(h)))
+
+
+def to_tower():
+    """Sigue la línea hasta quedar a side_margin de la torre (referencia: borde de la zona verde)."""
+    traveled = 0
+    if lf.last_edge is not None:
+        traveled = hal.odo_abs() - lf.last_edge
+    adv = geo.tower_advance(traveled)
+    if adv <= 0:
+        return True
+    return lf.follow_until(lf.after_cm(adv), cfg.P["v_slow"], 8)
 
 
 # ---------------------------------------------------------------- pasos
@@ -135,7 +162,13 @@ def run_step(step):
     if kind == "spin":
         return motion.spin_to_line(step[1])
     if kind == "approach_ped":
-        return approach_pedestal(step[1])
+        return approach_pedestal(step[1], step[2])
+    if kind == "approach_obj":
+        return approach_object(step[1], step[2])
+    if kind == "retreat":
+        return motion.straight(-last_advance, cfg.P["v_slow"])
+    if kind == "to_tower":
+        return to_tower()
     if kind == "climb":
         return motion.climb()
     if kind == "stairs":

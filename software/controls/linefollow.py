@@ -23,6 +23,7 @@ _seen_r = False
 _clear_since = None      # odometría desde que ambas exteriores están en blanco (refractario)
 _armed = True
 last_junction = None     # (tipo, odometría absoluta del inicio del cruce)
+last_edge = None         # odometría absoluta al salir de una zona de color (leave_color)
 
 
 def reset():
@@ -195,7 +196,27 @@ def after_cm(cm):
     return cond
 
 
+def leave_color(name, probes=("L1", "R1")):
+    """Verdadero cuando las sondas dejan de ver la zona de ese color (3 lecturas seguidas).
+    Guarda la odometría en last_edge: es la referencia para medir desde el borde de la zona."""
+    state = {"n": 0}
+
+    def cond(bits, j):
+        global last_edge
+        inside = False
+        for pr in probes:
+            if colors.read(pr) == name:
+                inside = True
+        state["n"] = 0 if inside else state["n"] + 1
+        if state["n"] >= cfg.COLOR_CONFIRM:
+            last_edge = hal.odo_abs()
+            return True
+        return False
+    return cond
+
+
 def obstacle_within(cm):
+    """Solo con ultrasónico (HAS_US = True)."""
     def cond(bits, j):
         d = hal.distance_cm()
         return 0 < d <= cm

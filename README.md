@@ -59,7 +59,8 @@ y se vuelve a empaquetar).
 2. Corregir los signos de [`config.py`](software/core/config.py) (`HEADING_SIGN`, `PITCH_SIGN`).
 3. Medir la geometría del robot y el brazo ([docs/geometria.md](docs/geometria.md)) y ponerla en `P`, o ajustarla desde el menú.
 4. En la pista: menú → *Calibrar linea*; ajustar `kp`, `kd` y `v_line`; *Probar recta 50* para `slip`.
-5. Contar los cruces del nivel 1 y escribir `ROUTE_L1` en [`missions.py`](software/autonomous/missions.py); ajustar la ruta nivel por nivel.
+5. Medir en la pista las distancias de referencia a los pedestales y a la torre (menú → *Pista*).
+6. Contar los cruces del nivel 1 y escribir `ROUTE_L1` en [`missions.py`](software/autonomous/missions.py); ajustar la ruta nivel por nivel.
 
 ## Reglas de código
 

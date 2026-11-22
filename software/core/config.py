@@ -10,7 +10,8 @@
 
 # ---------------------------------------------------------------- puertos (fijos)
 LINE_SENSOR = 1          # índice del Quad RGB (mbuild)
-US_SENSOR = 1            # índice del Ultrasónico 2
+HAS_US = False           # el diseño actual NO lleva ultrasónico (ver docs/geometria.md)
+US_SENSOR = 1            # índice del Ultrasónico 2, solo si HAS_US
 SERVO_CLAW = "s1"        # garra (abrir / cerrar)
 SERVO_ARM = "s2"         # brazo de paralelogramo (subir / bajar)
 PROBES = ("L2", "L1", "R1", "R2")
@@ -36,7 +37,6 @@ P = {
     "rear_len": 9.0,         # del centro de giro a la parte trasera
     "sensor_fwd": 7.0,       # del centro de giro a las sondas del Quad RGB
     "probe_pitch": 1.3,      # separación entre sondas vecinas del Quad RGB (MEDIR)
-    "us_fwd": 10.0,          # del centro de giro a la cara del ultrasónico
     "claw_fwd": 20.0,        # del centro de giro al punto de agarre de la garra
     "card_probe_fwd": 7.0,   # del centro de giro a la sonda que lee tarjetas
     "sprocket_d": 4.4,       # diámetro efectivo de la rueda motriz de la oruga
@@ -86,9 +86,11 @@ P = {
     "pitch_flat": 4,         # grados: ya está plano arriba
     "ramp_margin": 3.0,      # cm extra para quedar "completamente dentro"
 
-    # --- props
-    "ped_gap": 1.0,          # holgura entre la garra y el pedestal al acercarse
-    "tower_detect": 12.0,    # cm del ultrasónico para detectar la torre
+    # --- medidas de la PISTA (MEDIR en la pista de prueba; sin ultrasónico son la referencia)
+    "ped1_from_cross": 12.0, # nivel 1: del cruce frente al cubo al centro del pedestal
+    "ped2_from_cross": 12.0, # nivel 2: del cruce antes del pedestal al centro del pedestal
+    "ball_ped_dist": 15.0,   # nivel 3: del centro de la línea (en la marca roja) al centro del pedestal
+    "tower_from_edge": 25.0, # nivel 4: del borde de salida de la zona verde a la cara de la torre
     "tower_size": 10.0,
     "side_margin": 4.0,      # holgura lateral al rodear
     "bar_side": -1,          # -1 = barra de pelotas a la izquierda de la línea, 1 = derecha
@@ -103,7 +105,7 @@ TUNE = [
     ("Linea", "kp", 0.05, 0, 3), ("Linea", "kd", 0.1, 0, 10), ("Linea", "v_line", 5, 10, 100),
     ("Linea", "dark_th", 0.05, 0.1, 0.9), ("Linea", "cross_win", 0.5, 1, 15),
     ("Linea", "line_mode", 1, 0, 1), ("Linea", "green", 1, 0, 1),
-    ("Geometria", "sensor_fwd", 0.5, 0, 30), ("Geometria", "us_fwd", 0.5, 0, 30),
+    ("Geometria", "sensor_fwd", 0.5, 0, 30), ("Geometria", "rear_len", 0.5, 0, 30),
     ("Geometria", "claw_fwd", 0.5, 0, 40), ("Geometria", "card_probe_fwd", 0.5, 0, 30),
     ("Geometria", "track_w", 0.5, 5, 30), ("Geometria", "robot_len", 0.5, 10, 50),
     ("Geometria", "robot_w", 0.5, 10, 40), ("Geometria", "sprocket_d", 0.1, 2, 10),
@@ -117,8 +119,10 @@ TUNE = [
     ("Movimiento", "v_slow", 5, 10, 100), ("Movimiento", "v_ramp", 5, 10, 100),
     ("Movimiento", "v_stairs", 5, 10, 100), ("Movimiento", "v_turn_min", 1, 5, 60),
     ("Movimiento", "turn_kp", 0.1, 0.1, 5), ("Movimiento", "head_kp", 0.1, 0, 5),
-    ("Props", "ped_gap", 0.5, 0, 10), ("Props", "tower_detect", 1, 3, 40),
-    ("Props", "bar_side", 2, -1, 1), ("Props", "bar_reach", 0.5, 0, 30),
+    ("Pista", "ped1_from_cross", 0.5, 0, 60), ("Pista", "ped2_from_cross", 0.5, 0, 60),
+    ("Pista", "ball_ped_dist", 0.5, 0, 60), ("Pista", "tower_from_edge", 0.5, 0, 100),
+    ("Pista", "side_margin", 0.5, 0, 15), ("Pista", "bar_side", 2, -1, 1),
+    ("Pista", "bar_reach", 0.5, 0, 30),
 ]
 
 # Calibración de la línea por sonda: luz sobre blanco y sobre negro (menú "Calibrar linea").

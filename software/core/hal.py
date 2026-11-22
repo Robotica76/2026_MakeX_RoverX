@@ -187,8 +187,11 @@ def probe_color_builtin(probe):
     return mbuild.quad_rgb_sensor.get_color_sta(probe)
 
 
-# ---------------------------------------------------------------- ultrasónico
+# ---------------------------------------------------------------- ultrasónico (opcional)
 def distance_cm():
+    """Distancia del Ultrasónico 2, o -1 si el robot no lo lleva (HAS_US = False)."""
+    if not cfg.HAS_US:
+        return -1
     return mbuild.ultrasonic2.get(index=cfg.US_SENSOR)
 
 

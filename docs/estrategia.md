@@ -8,10 +8,10 @@ pista**. Los giros, distancias y conteos se ajustan ahí, sin tocar la lógica.
 
 | Nivel | Inicio | Recorrido previsto | Primitivas |
 | --- | --- | --- | --- |
-| 1 | X roja | Red de líneas con un tope, hasta el pedestal del cubo al pie de la rampa. Tomar el cubo, volver a la línea y subir la rampa | Tabla de cruces y giros `ROUTE_L1` (`junction` + `jturn`), `approach_ped` (ultrasónico + geometría), garra, `hold` 5 s, `climb` (pitch) |
-| 2 | Zona amarilla | Tramo hasta el pedestal: dejar el cubo. Pasillo entre muros sin línea, con recortes sueltos: cruzarlo recto con giroscopio. Rampa blanca | `line … obstacle`, `straight` lento, `spin` para recuperar la línea, `climb` |
-| 3 | Zona azul | Curva en S con el prisma sobre la línea: empujarlo hasta la marca roja y rodearlo. Pedestal de la pelota a un lado. Escalera | `line … color red` a velocidad de empuje, `detour`, `stairs` |
-| 4 | Zona verde | Torre fija sobre la línea: rodearla. Tarjetas de color junto a la barra: leerlas y recordar la roja. Regresar a la casilla roja y dejar la pelota. Seguir hasta la X azul y parar | `detour`, `cards`, `drop_red`, `stop_in blue` |
+| 1 | X roja | Red de líneas con un tope, hasta el pedestal del cubo al pie de la rampa. Tomar el cubo, volver a la línea y subir la rampa | Tabla de cruces y giros `ROUTE_L1` (`junction` + `jturn`), `approach_ped` (distancia desde el cruce + geometría; sin ultrasónico), garra, `hold` 5 s, `climb` (pitch) |
+| 2 | Zona amarilla | Tramo hasta el pedestal: dejar el cubo. Pasillo entre muros sin línea, con recortes sueltos: cruzarlo recto con giroscopio. Rampa blanca | `line … junction` + `approach_ped`, `straight` lento, `spin` para recuperar la línea, `climb` |
+| 3 | Zona azul | Curva en S con el prisma sobre la línea: empujarlo hasta la marca roja y rodearlo. Pedestal de la pelota a un lado. Escalera | `line … color red` a velocidad de empuje, `detour`, `approach_obj` (pelota), `stairs` |
+| 4 | Zona verde | Torre fija sobre la línea: rodearla. Tarjetas de color junto a la barra: leerlas y recordar la roja. Regresar a la casilla roja y dejar la pelota. Seguir hasta la X azul y parar | `leave green` + `to_tower` (distancia desde la zona), `detour`, `cards`, `drop_red`, `stop_in blue` |
 
 ## Decisiones
 
@@ -37,4 +37,5 @@ pista**. Los giros, distancias y conteos se ajustan ahí, sin tocar la lógica.
 - Medidas del diseño propuesto (orugas largas + brazo de paralelogramo con garra): ver
   [geometria.md](geometria.md). Servos: `s1` garra, `s2` brazo.
 - Altura y posición del Quad RGB y de la sonda que lee las tarjetas (`CARD_PROBE`, `card_probe_fwd`).
-- Ultrasónico al frente, a la altura del pedestal (10 cm) y de la torre.
+- El robot **no lleva ultrasónico**: medir en la pista las distancias de referencia de
+  [geometria.md](geometria.md#sin-ultrasónico-medidas-de-la-pista).

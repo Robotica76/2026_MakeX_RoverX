@@ -116,7 +116,7 @@ def show_sensors():
     while not hal.button("b"):
         dk = hal.darkness()
         hal.show("%.2f %.2f %.2f %.2f" % (dk["L2"], dk["L1"], dk["R1"], dk["R2"]), line=1)
-        hal.show("off %d  us %d" % (hal.offset_from(dk), hal.distance_cm()), line=2)
+        hal.show("offset %d" % hal.offset_from(dk), line=2)
         hal.show("pitch %d  rumbo %d" % (hal.pitch(), hal.heading()), line=3)
         hal.wait(0.05)
     hal.wait(0.3)

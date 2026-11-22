@@ -99,11 +99,52 @@ def test_cm_per_deg_from_sprocket():
 
 
 def test_geometry_driven_distances():
-    cfg.P.update({"claw_fwd": 20, "us_fwd": 10, "ped_gap": 1, "arm_len": 8})
+    cfg.P.update({"claw_fwd": 20, "arm_len": 8, "sensor_fwd": 7})
     h = cfg.P["arm_pivot_h"] + cfg.P["arm_grip_dz"]       # brazo horizontal
-    assert geo.pedestal_us_target(h) == pytest.approx(20 - 3 - 10 + 1)
+    # pedestal a 12 cm del cruce; ya se avanzaron 3 cm desde que las sondas lo vieron
+    assert geo.pedestal_advance(h, 12, 3) == pytest.approx(12 - 20 + 7 - 3)
+    assert geo.reach_advance(15, h) == pytest.approx(15 - 20)
     assert geo.card_to_center(100, 112) == pytest.approx(100 + cfg.P["card_probe_fwd"] - 112)
     assert geo.detour_out() > cfg.P["robot_w"] / 2
+    assert geo.detour_pass() > cfg.P["robot_len"] + cfg.P["tower_size"]
+
+
+def test_tower_advance_leaves_margin():
+    cfg.P.update({"tower_from_edge": 40, "robot_len": 30, "rear_len": 9, "side_margin": 4,
+                  "sensor_fwd": 7})
+    # centro de giro al salir de la zona: -7; la punta (21 cm adelante) debe quedar a 4 cm de 40
+    assert geo.tower_advance(0) == pytest.approx(40 - 21 - 4 + 7)
+    assert geo.tower_advance(5) == pytest.approx(40 - 21 - 4 + 7 - 5)
+
+
+# ---------------------------------------------------------------- sin ultrasónico
+def test_no_ultrasonic_by_default():
+    assert cfg.HAS_US is False
+    assert hal.distance_cm() == -1
+
+
+def test_approach_pedestal_measures_from_last_junction(monkeypatch):
+    moves = []
+    monkeypatch.setattr(motion, "straight", lambda cm, speed=None, timeout=None: moves.append(cm) or True)
+    lf.last_junction = ("X", hal.odo_abs() - 2.0)
+    h = cfg.P["h_pedestal"]
+    assert auto.run_step(("approach_ped", "h_pedestal", "ped1_from_cross"))
+    assert moves[0] == pytest.approx(geo.pedestal_advance(h, cfg.P["ped1_from_cross"], 2.0), abs=0.05)
+    assert auto.run_step(("retreat",))
+    assert moves[1] == pytest.approx(-moves[0])
+
+
+def test_leave_color_records_zone_edge():
+    world.sensors["color"] = lambda p: "green" if hal.odo_abs() < 10 else "white"
+    assert lf.follow_until(lf.leave_color("green"), timeout=10)
+    assert 10 <= lf.last_edge <= 12
+
+
+def test_to_tower_follows_line_the_remaining_distance():
+    lf.last_edge = hal.odo_abs()
+    start = hal.odo_abs()
+    assert auto.to_tower()
+    assert hal.odo_abs() - start == pytest.approx(geo.tower_advance(0), abs=1.0)
 
 
 # ---------------------------------------------------------------- cruces con memoria
@@ -257,16 +298,21 @@ def test_abort_button_stops_runner(monkeypatch):
 
 
 def test_all_mission_steps_are_known_and_params_exist():
-    known = {"line", "jturn", "straight", "turn", "spin", "approach_ped", "climb", "stairs",
-             "claw", "arm", "hold", "detour", "cards", "drop_red", "stop_in", "wait"}
+    known = {"line", "jturn", "straight", "turn", "spin", "approach_ped", "approach_obj",
+             "retreat", "to_tower", "climb", "stairs", "claw", "arm", "hold", "detour", "cards",
+             "drop_red", "stop_in", "wait"}
     for m in ms.MISSIONS:
         for s in m["steps"]:
             assert s[0] in known, (m["id"], s)
             if s[0] == "line":
                 auto.make_cond(s[1])
                 auto.val(s[2])
-            if s[0] in ("claw", "arm", "approach_ped"):
+            if s[0] in ("claw", "arm", "approach_ped", "approach_obj"):
                 auto.val(s[1])
+            if s[0] in ("approach_ped", "approach_obj"):
+                auto.val(s[2])
+            if s[0] == "line":
+                assert s[1][0] != "obstacle", "el robot no lleva ultrasónico"
 
 
 def test_params_are_read_at_run_time():

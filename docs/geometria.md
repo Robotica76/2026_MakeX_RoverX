@@ -23,7 +23,6 @@ cual gira el robot.
    │ a  │               │ a  │
    └────┴───────────────┴────┘
           ▲ sensor_fwd: hasta las sondas del Quad RGB (L2 L1 R1 R2, separadas probe_pitch)
-          ▲ us_fwd: hasta la cara del ultrasónico
           ▲ claw_fwd: hasta el punto de agarre, con el brazo horizontal
           ▲ card_probe_fwd: hasta la sonda que lee las tarjetas (CARD_PROBE)
           robot_len: largo total
@@ -33,8 +32,7 @@ cual gira el robot.
 | --- | --- | --- |
 | `sensor_fwd` | centro de giro → sondas del Quad RGB | Al detectar un cruce, avanzar esto para **girar sobre el cruce** |
 | `probe_pitch` | separación entre sondas vecinas | Posición de cada sonda (calibración, pruebas) |
-| `us_fwd` | centro de giro → ultrasónico | Lectura a la que hay que detenerse frente al pedestal |
-| `claw_fwd` | centro de giro → punto de agarre (brazo horizontal) | Alcance de la garra |
+| `claw_fwd` | centro de giro → punto de agarre (brazo horizontal) | Alcance de la garra: cuánto avanzar para llegar a un pedestal |
 | `card_probe_fwd` | centro de giro → sonda de tarjetas | Regresar exactamente a la tarjeta roja |
 | `track_w`, `robot_w`, `robot_len`, `rear_len` | dimensiones | Rodear la torre, quedar "completamente dentro" de un nivel o zona |
 | `sprocket_d`, `slip` | rueda motriz de la oruga y patinaje | Convertir grados del encoder a cm |
@@ -42,6 +40,27 @@ cual gira el robot.
 | `arm_zero`, `arm_dir` | ángulo del servo con el brazo horizontal; sentido | Igual |
 | `h_floor`, `h_pedestal`, `h_carry`, `h_bar` | alturas de trabajo de la garra | Misiones 2, 4, 8, 12 y el control manual |
 | `claw_open`, `claw_cube`, `claw_ball` | ángulos del servo de la garra | Igual |
+
+## Sin ultrasónico: medidas de la pista
+
+El diseño no lleva sensor de distancia, así que los props se alcanzan **con el encoder, desde
+una referencia que las sondas sí detectan**: un cruce o el borde de una zona de color. Para cada
+uno se mide una vez en la pista de prueba la distancia de la referencia al prop, y la geometría
+del robot hace el resto.
+
+| Clave | Referencia → prop | Misión |
+| --- | --- | --- |
+| `ped1_from_cross` | cruce frente al cubo → centro del pedestal (nivel 1) | 2 |
+| `ped2_from_cross` | cruce antes del pedestal → centro del pedestal (nivel 2) | 4 |
+| `ball_ped_dist` | centro de la línea en la marca roja → centro del pedestal de la pelota | 8 |
+| `tower_from_edge` | borde de salida de la zona verde → cara cercana de la torre | 10 |
+
+Ejemplo (misión 2): cuando las sondas cierran el cruce, el centro de giro está `sensor_fwd`
+atrás de él. El robot avanza `ped1_from_cross − claw_reach(h_pedestal) + sensor_fwd − (lo ya
+avanzado)`, cierra la garra y regresa exactamente lo mismo (`retreat`).
+
+Si después se agrega un ultrasónico, se pone `HAS_US = True` en `config.py`. La condición
+`("obstacle", cm)` sigue disponible para las misiones.
 
 ### El brazo de paralelogramo
 
@@ -94,8 +113,7 @@ En el menú de inicio: **joystick a la derecha**.
 | A | Probar: el brazo va a la altura, la garra a la apertura, o se ejecuta la acción |
 | B | Guardar y salir |
 
-Acciones: *Calibrar linea*, *Ver sensores* (oscuridad por sonda, offset, ultrasónico, pitch,
-rumbo), *Probar giro 90*, *Probar recta 50* (medir con cinta y ajustar `slip`) y
+Acciones: *Calibrar linea*, *Ver sensores* (oscuridad por sonda, offset, pitch, rumbo), *Probar giro 90*, *Probar recta 50* (medir con cinta y ajustar `slip`) y
 *Restaurar valores*.
 
 Los parámetros se guardan en el CyberPi (`rover_params.json`) y se cargan al encender; la

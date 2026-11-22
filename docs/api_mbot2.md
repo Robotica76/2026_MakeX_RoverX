@@ -41,7 +41,7 @@ import cyberpi, mbot2, mbuild, gamepad, time
 
 ## Ultrasónico 2
 
-`mbuild.ultrasonic2.get(index=1)` ✅ (cm)
+`mbuild.ultrasonic2.get(index=1)` ✅ (cm). El diseño actual **no lo lleva** (`HAS_US = False`).
 
 ## CyberPi
 
