@@ -308,8 +308,8 @@ def test_runner_skips_lower_levels_and_stops_on_critical_failure(monkeypatch):
 def test_runner_continues_after_non_critical_failure(monkeypatch):
     ran = []
     monkeypatch.setattr(auto, "run_mission", lambda m: ran.append(m["id"]) or m["id"] != 11)
-    assert auto.run(start_level=4) == 100 + 150 + 100
-    assert ran == [10, 11, 12, 13]
+    assert auto.run(start_level=4) == 100 + 100       # la misión 12 está omitida (pelota)
+    assert ran == [10, 11, 13]
 
 
 def test_abort_button_stops_runner(monkeypatch):
@@ -321,7 +321,7 @@ def test_abort_button_stops_runner(monkeypatch):
 def test_all_mission_steps_are_known_and_params_exist():
     known = {"line", "jturn", "center", "straight", "turn", "spin", "approach_ped", "approach_obj",
              "retreat", "to_tower", "climb", "stairs", "claw", "arm", "hold", "detour", "cards",
-             "drop_red", "stop_in", "wait", "seek", "ref", "head", "drive", "crest", "if_start", "line_ref", "cross"}
+             "drop_red", "stop_in", "wait", "seek", "ref", "head", "drive", "crest", "if_start", "line_ref", "cross", "edge"}
     for m in ms.MISSIONS:
         for s in m["steps"]:
             assert s[0] in known, (m["id"], s)
@@ -345,7 +345,8 @@ def test_params_are_read_at_run_time():
 
 
 def test_points_match_rulebook():
-    assert ms.total_points() == 1270
+    # reglamento: 1270; las misiones 8 (100) y 12 (150) están omitidas por ahora (pelota)
+    assert ms.total_points() == 1270 - 100 - 150
 
 
 # ---------------------------------------------------------------- menú de ajustes

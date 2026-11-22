@@ -66,6 +66,9 @@ class Sim:
         self.t_phys = 0.0
         self.acc = 0.0                  # aceleración longitudinal filtrada (cm/s²)
         self.min_tip = 99.0             # menor margen contra volcadura de la corrida (cm)
+        self.slides = 0                 # veces que se resbaló hacia atrás en una pendiente
+        self.placed_level = level       # nivel más alto en el que el equipo lo colocó
+        self._slide_logged = -9.0
         self.contacts = set()           # props tocados ahora (para registrar el inicio del choque)
         self._hit_logged = {}
         self.bumps = set()
@@ -109,6 +112,25 @@ class Sim:
         w.rot_z = 0.0
         self._last_yaw = self.yaw
 
+    def place(self, level, noise=None):
+        """El equipo recoloca el robot en la zona de inicio de `level` (reinicio), con un poco de
+        error de colocación. Conserva el objeto que lleva en la garra."""
+        n = self.noise if noise is None else noise
+        x, y, yaw = self.arena.start_pose(level)
+        self.x = x + self.rng.gauss(0, 0.7) * n
+        self.y = y + self.rng.gauss(0, 0.7) * n
+        self.yaw = yaw + self.rng.gauss(0, 1.5) * n
+        self._last_yaw = self.yaw
+        self.vl = self.vr = 0.0
+        self.acc = 0.0
+        self.z = self.arena.height(self.x, self.y)
+        self._update_pitch()
+        self.fallen = None
+        self.contacts = set()
+        self.placed_level = max(self.placed_level, level)
+        if self.held:
+            self._carry()
+
     def place_start_object(self):
         """Pone el objeto del nivel en la garra (llamar después de cerrar la garra)."""
         if self.start_held:
@@ -151,6 +173,11 @@ class Sim:
         v_old = (self.vl + self.vr) / 2.0
         self.vl += (tl - self.vl) * min(1.0, a)
         self.vr += (tr - self.vr) * min(1.0, a)
+        if left_p + right_p > 0 and (self.vl + self.vr) / 2.0 < -0.5 and self.pitch > 5:
+            if self.world.t - self._slide_logged > 1.0:
+                self.log.append((self.world.t, "se resbala hacia atrás en la pendiente (%.0f°)" % self.pitch))
+                self.slides += 1
+            self._slide_logged = self.world.t
         acc = ((self.vl + self.vr) / 2.0 - v_old) / dt
         self.acc += (acc - self.acc) * min(1.0, dt / 0.03)
         self._check_tip()

@@ -13,6 +13,7 @@
 #   ("line", cond, vel, timeout[, verde])  seguir la línea hasta cond:
 #        ("junction", n, tipo)  n cruces; tipo "any" / "X" / "L" / "R"
 #        ("color", nombre)  ("leave", color) salir de una zona  ("cm", d)  ("end",)
+#        ("color_cm", color, d)  d cm después de ver el color (terminar una rampa sin parar en ella)
 #        ("pitch",) empieza una rampa   ("obstacle", cm) solo si hay ultrasónico
 #   ("jturn", grados)          girar EN el último cruce (centro de giro sobre él) y alinear
 #   ("straight", cm[, vel])    recto con giroscopio (negativo = atrás)
@@ -42,8 +43,10 @@
 #   ("detour", lado)           rodear la torre (-1 izquierda, 1 derecha)
 #   ("cards",) / ("drop_red",) / ("stop_in", color)
 #
-# critical=True: si falla, el robot quedó fuera de ruta y el autónomo se detiene (conviene
-# pedir reinicio en la zona del nivel). critical=False: se sigue con la siguiente misión.
+# critical=True: si falla, el robot quedó fuera de ruta: pide reinicio en la zona del nivel
+# (cfg.RESTART_AT_ZONES) o se detiene. critical=False: se sigue con la siguiente misión.
+# end_level=True: completa el nivel (ya está completamente dentro del siguiente): con la
+# estrategia de reinicios, el robot se detiene y pide reinicio en la zona del siguiente nivel.
 
 # ---- nivel 1 POR COMANDOS (experiencia del equipo: con la línea delgada y las marcas verdes
 # seguir la línea no funcionaba). Cada tramo es "avanza X cm sosteniendo el rumbo Y" con el IMU,
@@ -72,20 +75,44 @@ CORRIDOR = [
     ("seek", "v_slow", 35, 0),  # hacia el este hasta la diagonal que baja a la rampa blanca
     ("center",), ("spin", 1),   # centro de giro sobre la diagonal y girar a seguirla hacia abajo
 ]
-L3_IN_CM = 12.0             # nivel 3: de la orilla de la zona azul a quedar completamente dentro
-# Nivel 3: rodear el prisma ya dejado en la zona punteada por el norte (al sur está la orilla de
-# la arena) y volver a la línea antes de la segunda marca roja. Rumbos de mapa, referidos a la
-# recta de la rampa blanca (hacia el sur).
-PRISM_DETOUR = [
-    ("arm", "h_carry"),         # suelta el prisma
-    ("straight", -6, "v_slow"),
-    ("drive", -90, 9.5),        # norte: separarse del prisma
-    ("drive", 180, 35),         # oeste: rebasarlo
-    ("seek", "v_slow", 25, 135),  # suroeste hasta la línea que sube a la segunda marca roja
-    ("center",), ("spin", 1),
+L3_IN_CM = 17.0             # nivel 3: de la orilla de la zona azul a quedar completamente dentro
+# Nivel 3 POR MANIOBRA (estrategia del equipo: los puntos son por dejar el prisma en la zona
+# punteada, no por seguir la línea). Rumbos de mapa (0 este, 90 sur, 180 oeste, -90 norte) y
+# distancias fijas desde la orilla de la zona azul. TODO(medir en pista): salen del plano.
+L3_PRISM_SOUTH = 3.6        # de la orilla de la zona azul a la altura del prisma
+L3_PRISM_BACK = 4.0         # retroceso para bajar la garra sin tocar el prisma
+L3_PRISM_GRAB = 6.5         # avance al oeste hasta tener el prisma en la garra
+L3_PRISM_HEAD = 107         # rumbo hacia la zona punteada (con el prisma en la garra)
+L3_PRISM_CARRY = 22.0       # avance con el prisma hasta dejarlo en la zona
+L3_PRISM_LEAVE = 8.0        # retroceso después de soltarlo
+L3_TO_STAIRS_HEAD = 169     # rumbo hacia el punto al sur de la línea, frente a la escalera
+L3_TO_STAIRS_CM = 56.6
+PRISM_MANEUVER = [
+    ("edge", "blue", "v_slow", 30, 90),      # salir de la zona azul: referencia fija
+    ("drive", 90, L3_PRISM_SOUTH),
+    ("arm", "h_top"), ("head", 180),         # brazo arriba para girar sin barrer el prisma
+    ("straight", -L3_PRISM_BACK, "v_slow"),
+    ("claw", "claw_open"), ("arm", "h_prism"),
+    ("drive", 180, L3_PRISM_GRAB),           # el prisma entra entre los dedos abiertos
+    ("head", L3_PRISM_HEAD),                 # gira con el prisma en la garra
+    ("drive", L3_PRISM_HEAD, L3_PRISM_CARRY),
+    ("arm", "h_carry"),                      # lo suelta
+    ("straight", -L3_PRISM_LEAVE, "v_slow"),
 ]
-BALL_HEAD = 113             # nivel 3: rumbo de mapa de la segunda marca roja al pedestal de la pelota
-LINE_HEAD_AT_MARK2 = -152   # rumbo de la línea en la segunda marca roja (hacia la escalera)
+# De ahí a la escalera: cruzar la línea de la escalera de forma perpendicular (referencia lateral:
+# cada oruga debe ir sobre su tramo) y girar al oeste.
+TO_STAIRS = [
+    ("drive", L3_TO_STAIRS_HEAD, L3_TO_STAIRS_CM),
+    ("cross", "v_slow", 15, -90), ("center",),
+    ("head", 180),
+]
+# Pelota (misión 8): OMITIDA por ahora (decisión del equipo). Pasos guardados para después.
+BALL_HEAD = 113
+LINE_HEAD_AT_MARK2 = -152
+BALL_STEPS = [("line", ("color", "red"), "v_slow", 20), ("center",),
+              ("head", BALL_HEAD), ("arm", "h_pedestal"), ("claw", "claw_open"),
+              ("approach_obj", "h_pedestal", "ball_ped_dist"), ("claw", "claw_ball"),
+              ("arm", "h_carry"), ("retreat",), ("hold",), ("head", LINE_HEAD_AT_MARK2)]
 STAIRS_TOP_CM = 7.0         # nivel 4: avance desde que las sondas ven la zona verde (TODO pista)
 # Nivel 4: rodear la torre por el sur (al norte está la barra). Se vuelve a la línea con espacio
 # para girar sin barrer la torre (~13 cm de radio) y entre dos tarjetas (lo mostró el simulador).
@@ -93,7 +120,8 @@ TOWER_DETOUR = [
     ("drive", 110, 17),         # sur-suroeste: alejarse de la orilla del nivel 4 (a ~4 cm)
     ("drive", 180, 41),         # oeste, paralelo a la línea, hasta pasar la torre
     ("seek", "v_slow", 25, -90),  # norte hasta la línea
-    ("center",), ("spin", -1),  # quedar mirando al oeste sobre la línea
+    ("center",), ("head", 180),  # mirando al oeste sobre la línea (con IMU: las sondas pueden
+                                 # quedar sobre una tarjeta que tapa la línea)
 ]        # nivel 4: avance después de la cima de la escalera (TODO pista)
 
 
@@ -120,7 +148,7 @@ MISSIONS = [
     {"id": 2, "level": 1, "pts": 50, "name": "Tomar cubo", "critical": False,
      "steps": [("approach_ped", "h_pedestal", "ped1_from_cross"), ("claw", "claw_cube"),
                ("arm", "h_carry"), ("retreat",), ("hold",)]},
-    {"id": 3, "level": 1, "pts": 50, "name": "Subir nivel 2", "critical": True,
+    {"id": 3, "level": 1, "pts": 50, "name": "Subir nivel 2", "critical": True, "end_level": True,
      # El pedestal está a 8 cm del cruce y el robot barre ~13 cm al girar, así que no puede
      # girar sobre el cruce (lo mostró el simulador). Retrocede, gira al norte, busca la línea
      # punteada y la sigue por la rampa hasta la T del nivel 2 (siguiendo la línea y no recto:
@@ -131,7 +159,9 @@ MISSIONS = [
      "steps": [("straight", -L1_BACK_CM, "v_slow"),
                ("drive", -90, L1_NORTH_CM), ("drive", 0, L1_TO_RAMP_CM),
                ("line", ("pitch",), "v_slow", 6), ("arm", "h_climb"),
-               ("line", ("junction", 1, "any"), "v_ramp", 8), ("arm", "h_carry")]},
+               ("line", ("junction", 1, "any"), "v_ramp", 8),
+               ("center",),                       # centro de giro sobre la T: completamente dentro
+               ("arm", "h_carry")]},
 
     # ------------------------------------------------------------ NIVEL 2 (zona amarilla)
     {"id": 4, "level": 2, "pts": 100, "name": "Dejar cubo", "critical": False,
@@ -143,55 +173,39 @@ MISSIONS = [
                ("straight", -L2_BACK_CM, "v_slow"), ("head", 90)]},
     {"id": 5, "level": 2, "pts": 100, "name": "Zona obstaculos", "critical": True,
      "steps": [("line", ("end",), "v_slow", 15)] + CORRIDOR},
-    {"id": 6, "level": 2, "pts": 100, "name": "Subir nivel 3", "critical": True,
+    {"id": 6, "level": 2, "pts": 100, "name": "Subir nivel 3", "critical": True, "end_level": True,
      # sigue la línea por la rampa blanca hasta salir de la zona azul (ya completamente dentro)
      # Al ver la zona azul avanza L3_IN_CM: ya completamente dentro, pero antes de la curva de la
      # S (que empieza dentro de la zona; con "salir de la zona" el robot ya la había pasado).
+     # Nunca detenerse sobre la pendiente: al ver la zona azul sigue L3_IN_CM sin parar. El rumbo
+     # promedio de toda la rampa (recta al sur) queda como referencia del nivel 3.
      "steps": [("line", ("pitch",), "v_line", 12), ("arm", "h_climb"),
-               ("line", ("color", "blue"), "v_ramp", 8),
-               ("ref", 90),                       # después de 30 cm de recta en la rampa, al sur
-               ("line", ("cm", L3_IN_CM), "v_slow", 4)]},
+               ("line_ref", 90, ("color_cm", "blue", L3_IN_CM), "v_ramp", 10)]},
 
     # ------------------------------------------------------------ NIVEL 3 (zona azul)
     {"id": 7, "level": 3, "pts": 100, "name": "Mover prisma", "critical": False,
-     # Empujarlo con el frente no sirve: en la primera curva se sale de la línea, y para empujarlo
-     # hacia la zona el robot no cabe detrás de él (lo mostró el simulador). Se lleva con la garra
-     # abierta y baja, como una cuna, siguiendo la línea; en la primera marca roja queda dentro de
-     # la zona punteada. Se sube el brazo, se retrocede y se rodea.
-     "steps": [("ref", 90, 3),                                # reinicio aquí: colocado al sur
-               ("claw", "claw_open"), ("arm", "h_prism"),
-               ("line", ("color", "red"), "v_push", 25)] + PRISM_DETOUR},
-    {"id": 8, "level": 3, "pts": 100, "name": "Tomar pelota", "critical": False,
-     "steps": [("line", ("color", "red"), "v_slow", 20),         # despacio: la marca va junto a la línea
-               ("center",),                                   # centro de giro sobre la marca
-               ("head", BALL_HEAD), ("arm", "h_pedestal"), ("claw", "claw_open"),
-               ("approach_obj", "h_pedestal", "ball_ped_dist"), ("claw", "claw_ball"),
-               ("arm", "h_carry"), ("retreat",), ("hold",),
-               ("head", LINE_HEAD_AT_MARK2)]},
+     "steps": [("ref", 90, 3)] + PRISM_MANEUVER},              # reinicio aquí: colocado al sur
+    # misión 8 (pelota) omitida: ver BALL_STEPS
     {"id": 9, "level": 3, "pts": 150, "name": "Escalera nivel 4", "critical": True,
      # Entre la escalera y la torre hay ~20 cm y el robot mide ~24 cm con la garra: no cabe
-     # completo sobre la línea. Al ver la zona verde avanza STAIRS_TOP_CM (garra a ~4 cm de la torre) y
-     # termina de entrar al nivel 4 al rodear la torre (lo mostró el simulador).
-     # La escalera tiene dos tramos con 12 cm de hueco: se llega despacio (el seguidor queda
-     # centrado) y se sube sosteniendo el rumbo oeste con el IMU.
-     "steps": [("line", ("cm", 11), "v_slow", 6),            # hasta el tramo recto final
-               ("line_ref", 180, ("pitch",), "v_slow", 10),     # rumbo de la recta = oeste
-               ("arm", "h_climb"),
-               # al ver la verde el brazo sube SIN detenerse (con el brazo bajo la garra llega ~5 cm
-               # más lejos y tocaba la torre; parar en la escalera hacía resbalar al robot)
-               ("crest", STAIRS_TOP_CM, 180, "green", "h_carry")]},
+     # completo sobre la línea; al ver la zona verde avanza STAIRS_TOP_CM y el brazo sube sin
+     # detenerse (parar en la escalera lo hacía resbalar). Termina de entrar al rodear la torre.
+     "steps": TO_STAIRS + [("arm", "h_climb"),
+                           ("crest", STAIRS_TOP_CM, 180, "green", "h_carry")]},
 
     # ------------------------------------------------------------ NIVEL 4 (zona verde)
     {"id": 10, "level": 4, "pts": 100, "name": "Evitar torre", "critical": True,
-     # Al reiniciar en la zona verde, primero se acerca a la torre; viniendo de la escalera ya
-     # quedó a la distancia correcta.
+     # Los niveles 3 y 4 van seguidos (sin reinicio): el robot no cabe completo entre la escalera
+     # y la torre, así que el nivel 3 se completa al rodearla. Tras una falla aquí se reinicia en
+     # la zona verde.
      "steps": [("ref", 180, 4),
-               ("if_start", 4, [("line", ("leave", "green"), "v_slow", 6), ("to_tower",)]),
+               # colocado en la zona verde (12.7 cm, el robot mide ~24): brazo al máximo para que
+               # la garra no toque la torre; desde ahí el rodeo es el mismo
+               ("if_start", 4, [("arm", "h_top")]),
               ] + TOWER_DETOUR},
     {"id": 11, "level": 4, "pts": 120, "name": "Colores", "critical": False,
      "steps": [("cards",)]},
-    {"id": 12, "level": 4, "pts": 150, "name": "Pelota en rojo", "critical": False,
-     "steps": [("drop_red",)]},
+    # misión 12 (pelota en la casilla roja) omitida: necesita la pelota de la misión 8
     {"id": 13, "level": 4, "pts": 100, "name": "Meta azul", "critical": False,
      "steps": [("stop_in", "blue")]},
 ]

@@ -230,6 +230,29 @@ def seek_line(speed=None, max_cm=60, target=None):
     return found[0]
 
 
+def drive_to_edge(color, speed=None, max_cm=30, target=None):
+    """Avanza recto (IMU) hasta SALIR de una zona de color: referencia fija para empezar una
+    maniobra sin importar dónde quedó o se colocó el robot dentro de la zona."""
+    if speed is None:
+        speed = cfg.P["v_slow"]
+    hal.reset_odometer()
+    state = {"seen": False, "out": 0, "ok": False}
+
+    def cond():
+        inside = sees_color(color)
+        if inside:
+            state["seen"] = True
+            state["out"] = 0
+        elif state["seen"]:
+            state["out"] += 1
+            if state["out"] >= cfg.COLOR_CONFIRM:
+                state["ok"] = True
+                return True
+        return abs(hal.odometer_cm()) >= max_cm
+    straight_until(cond, speed, 1.0 + max_cm / 6.0, target)
+    return state["ok"]
+
+
 def drive_to_cross(speed=None, max_cm=15, target=None):
     """Avanza recto (IMU) hasta que las DOS sondas exteriores ven negro fuerte: una línea que
     cruza el camino. No es seguir la línea: solo sirve de referencia para corregir la distancia.

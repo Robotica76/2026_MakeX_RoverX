@@ -104,6 +104,7 @@ P = {
     # control contra volcadura (activo en rampas y escalera)
     "tip_pitch": 8,          # grados: desde aquí la potencia solo sube de a poco
     "tip_slew": 120,         # %/s: cuánto puede subir la potencia por segundo inclinado
+    "h_top": 18.0,           # brazo al máximo (garra lo más recogida): arranque en la zona verde
     "h_climb": 8.0,          # garra baja y al frente al subir: adelanta y baja el centro de masa
 
     # --- medidas de la PISTA (MEDIR en la pista de prueba; sin ultrasónico son la referencia)
@@ -170,6 +171,7 @@ CARD_COUNT = 6
 CARD_SCAN_MAX_CM = 120
 ZONE_LEVEL = {"red": 1, "yellow": 2, "blue": 3, "green": 4}
 GOAL_COLOR = "blue"
+GOAL_RUN_CM = 6.0        # azul seguido más largo que una tarjeta = la X de la meta
 
 # ---------------------------------------------------------------- tiempos
 TURN_SETTLE_S = 0.15
@@ -182,6 +184,11 @@ SERVO_STEP_S = 0.35
 HOLD_VALID_S = 5.5       # reglamento: sostener >= 5 s
 MATCH_S = 300
 AUTO_BUDGET_S = 300      # PREGUNTA ABIERTA: ¿el autónomo comparte los 5 min con el manual?
+# Estrategia del equipo: llegar a la zona de color de cada nivel y pedir reinicio ahí (el robot se
+# recoloca alineado y el error no pasa de un nivel a otro). También tras una falla crítica.
+RESTART_AT_ZONES = True
+RESTART_WAIT_S = 60      # sin A en este tiempo, el autónomo termina
+MAX_RETRIES = 2          # reintentos del mismo nivel tras fallas críticas
 
 # ---------------------------------------------------------------- control manual
 PAD_DEADZONE = 8

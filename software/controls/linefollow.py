@@ -197,6 +197,25 @@ def at_color(name, probes=("L1", "R1")):
     return cond
 
 
+def color_then_cm(name, cm, probes=None):
+    """Verdadero `cm` después de que alguna sonda vio ese color. Sirve para terminar arriba de una
+    rampa SIN detenerse sobre la pendiente (parado ahí, el robot se resbalaba hacia atrás al
+    arrancar; lo mostró el simulador con una rampa de 40°)."""
+    if probes is None:
+        probes = cfg.PROBES
+    state = {"from": None}
+
+    def cond(bits, j):
+        if state["from"] is None:
+            for pr in probes:
+                if colors.read(pr) == name:
+                    state["from"] = hal.odo_abs()
+                    break
+            return False
+        return hal.odo_abs() - state["from"] >= cm
+    return cond
+
+
 def after_cm(cm):
     start = hal.odo_abs()
 

@@ -71,8 +71,14 @@ def geometry_warnings():
     return out
 
 
+RESTART_S = 15.0            # s que tarda el equipo en pedir el reinicio y recolocar el robot
+
+
 def run_once(level=1, seed=0, noise=0.0, line_w=2.0, prog=None, true=None, budget=None,
-             record=True, ramp_deg=None):
+             record=True, ramp_deg=None, restarts=True):
+    """restarts=True: estrategia del equipo (cfg.RESTART_AT_ZONES): al pedir reinicio el
+    simulador recoloca el robot en la zona, descuenta RESTART_S y presiona A; tras una caída lo
+    recoloca en la zona del nivel que jugaba."""
     """Una corrida completa. Devuelve un dict con el reporte, el trazo y los eventos."""
     cfg.P.clear()
     cfg.P.update(copy.deepcopy(P0))
@@ -87,8 +93,30 @@ def run_once(level=1, seed=0, noise=0.0, line_w=2.0, prog=None, true=None, budge
     frames = []
     label = {"m": ""}
 
+    team = {"state": None, "t": 0.0}
+    sim.restarts = []
+    sim.falls = 0
+
+    def team_step():
+        lab = world.labels.get(0, "")
+        if team["state"] is None and lab.startswith("REINICIO"):
+            lvl = int(lab.split()[-1])
+            world.t += RESTART_S
+            sim.place(lvl)
+            sim.restarts.append(lvl)
+            log.append((world.t, "EQUIPO: reinicio en la zona del nivel %d" % lvl))
+            world.pressed.add("a")
+            team["state"], team["t"] = "pressed", world.t
+        elif team["state"] == "pressed" and world.t - team["t"] > 0.15:
+            world.pressed.discard("a")
+            team["state"] = "wait"
+        elif team["state"] == "wait" and not lab.startswith("REINICIO"):
+            team["state"] = None
+
     def on_frame():
-        ref.update()
+        ref.update()            # primero el juez (antes de que el equipo mueva el robot)
+        if restarts:
+            team_step()
         if record:
             o = sim.objects
             h, _ = sim.arm_h()
@@ -115,6 +143,8 @@ def run_once(level=1, seed=0, noise=0.0, line_w=2.0, prog=None, true=None, budge
 
     autonomous.run_mission = run_mission
     orig_sleep = physics.patch_time(sim)
+    cfg.RESTART_AT_ZONES = restarts
+    all_results = []
     points = 0
     error = None
     try:
@@ -127,19 +157,47 @@ def run_once(level=1, seed=0, noise=0.0, line_w=2.0, prog=None, true=None, budge
             sim.place_start_object()
         hal.reset_heading()
         t0 = world.t
-        points = autonomous.run(level, budget_s=budget, t_start=t0)
-    except physics.Fallen:
-        pass
+        bud = cfg.AUTO_BUDGET_S if budget is None else budget
+        lvl = level
+        while True:
+            try:
+                try:
+                    points += autonomous.run(lvl, budget_s=bud, t_start=t0,
+                                             skip=[mid for mid, ok in all_results if ok])
+                finally:
+                    all_results.extend(autonomous.results)
+                break
+            except physics.Fallen:
+                sim.falls += 1
+                lvl = autonomous.current_level
+                if not restarts or world.t + RESTART_S - t0 >= bud:
+                    sim.fallen = sim.fallen or "caída"
+                    break
+                world.t += RESTART_S
+                world.pressed.clear()
+                sim.place(lvl)
+                sim.restarts.append(lvl)
+                log.append((world.t, "EQUIPO: reinicio tras caída en la zona del nivel %d" % lvl))
+                hal.clear_abort()
+                hal.reset_heading()
     except Exception as e:     # un error del programa también es un resultado
         import traceback
         error = traceback.format_exc()
         log.append((world.t, "ERROR del programa: %r" % e))
     finally:
+        if not sim.fallen:
+            try:                    # que termine de frenar antes del veredicto final
+                hal.stop()
+                sim.sleep(0.5)
+            except physics.Fallen:
+                pass
         time.sleep = orig_sleep
         autonomous.run_mission = orig_run_mission
     on_frame()
     rep = ref.final()
-    rep["program"] = {mid: ok for mid, ok in autonomous.results}
+    rep["program"] = {}
+    for mid, ok in all_results:
+        rep["program"][mid] = rep["program"].get(mid, False) or ok
     rep["program_points"] = points
     rep["time"] = round(world.t, 1)
     rep["error"] = error

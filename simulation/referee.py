@@ -67,7 +67,8 @@ class Referee:
             else:
                 self.hold[name] = None
         for mid, lvl in ((3, 2), (6, 3), (9, 4)):
-            if mid not in self.done and self._corners_on(lvl):
+            # colocado ahí por un reinicio no cuenta: hay que haberlo subido
+            if mid not in self.done and lvl > s.placed_level and self._corners_on(lvl):
                 self._latch(mid)
         if ar.inside(a.room, s.x, s.y):
             self.in_room = True
@@ -107,6 +108,8 @@ class Referee:
         seen = sorted(set(c for c in self.shown if c in cards))
         out = []
         total = 0
+        falls = getattr(s, "falls", 0) + (1 if s.fallen else 0)
+        penalty = 20 * max(0, falls - 1)        # la primera falta es advertencia
         for mid in sorted(self.pts):
             if mid == 11:
                 p = 20 * len(seen)
@@ -122,5 +125,12 @@ class Referee:
         if s.fallen:
             notes.append("CAÍDA: " + s.fallen)
         notes_tip = s.min_tip
-        return {"missions": out, "total": total, "cards_seen": seen, "notes": notes,
-                "min_tip_cm": round(notes_tip, 1)}
+        if s.slides:
+            notes.append("se resbaló hacia atrás en una pendiente %d vez/veces" % s.slides)
+        if falls:
+            notes.append("caídas: %d (penalización %d)" % (falls, penalty))
+        restarts = getattr(s, "restarts", [])
+        if restarts:
+            notes.append("reinicios: %s" % ", ".join("nivel %d" % lv for lv in restarts))
+        return {"missions": out, "total": total - penalty, "cards_seen": seen, "notes": notes,
+                "min_tip_cm": round(notes_tip, 1), "restarts": len(restarts), "falls": falls}
