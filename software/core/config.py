@@ -189,7 +189,7 @@ AUTO_BUDGET_S = 300      # PREGUNTA ABIERTA: ¿el autónomo comparte los 5 min c
 # terminarlo (el equipo pide reinicio, lo coloca en la zona del siguiente nivel, lo elige y arranca).
 SEGMENTS = True
 LEVEL_KEYS = {"up": 1, "down": 2, "left": 3, "right": 4}   # TODO confirmar con el equipo
-START_BUTTON = "b"       # "play" (el equipo cree que es B; TODO confirmar)
+START_BUTTON = "b"       # "play" (confirmado por el equipo)
 ABORT_BUTTON = "a"       # durante el autónomo: abortar (el que no es de arranque)
 MANUAL_BUTTON = "a"      # en la pantalla de inicio: control manual
 MENU_BUTTON = "middle"   # en la pantalla de inicio: centro del joystick = ajustes
