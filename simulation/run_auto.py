@@ -129,6 +129,12 @@ def run_once(level=1, seed=0, noise=0.0, line_w=2.0, prog=None, true=None, budge
         return ok
 
     autonomous.run_mission = run_mission
+    orig_run_step = autonomous.run_step
+
+    def run_step(st):
+        sim.program_step = st[0]
+        return orig_run_step(st)
+    autonomous.run_step = run_step
     orig_sleep = physics.patch_time(sim)
     cfg.SEGMENTS = restarts
     autonomous.completed.clear()       # encendido nuevo
@@ -200,6 +206,7 @@ def run_once(level=1, seed=0, noise=0.0, line_w=2.0, prog=None, true=None, budge
                 pass
         time.sleep = orig_sleep
         autonomous.run_mission = orig_run_mission
+        autonomous.run_step = orig_run_step
     on_frame()
     rep = ref.final()
     rep["program"] = {}

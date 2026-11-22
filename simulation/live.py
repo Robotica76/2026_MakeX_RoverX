@@ -175,6 +175,12 @@ class Session:
             self.results.append((m["id"], ok))
             return ok
         autonomous.run_mission = run_mission
+        orig_rs = autonomous.run_step
+
+        def run_step(st):
+            self.sim.program_step = st[0]
+            return orig_rs(st)
+        autonomous.run_step = run_step
         autonomous.completed.clear()
         main = self._program()
         try:
@@ -200,6 +206,7 @@ class Session:
             pass
         finally:
             autonomous.run_mission = orig_rm
+            autonomous.run_step = orig_rs
 
     # ------------------------------------------------------------ estado para la página
     def snapshot(self, nf, ne):

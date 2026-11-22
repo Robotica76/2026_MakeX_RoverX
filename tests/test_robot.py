@@ -472,3 +472,11 @@ def test_choose_level_with_joystick_and_start(monkeypatch):
     monkeypatch.setattr(hal, "button", button)
     monkeypatch.setattr(hal, "wait", wait)
     assert auto.choose_level(1) == 3
+
+
+def test_drive_keeps_steering_at_full_power(sim):
+    """A potencia máxima la diferencia entre orugas (la dirección) se conserva."""
+    hal.drive(104, 96)
+    left = sim.em[0] * cfg.LEFT_SIGN
+    right = sim.em[1] * cfg.RIGHT_SIGN
+    assert left == pytest.approx(100) and right == pytest.approx(92)

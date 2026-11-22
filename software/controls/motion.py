@@ -260,16 +260,23 @@ def drive_to_cross(speed=None, max_cm=15, target=None):
     if speed is None:
         speed = cfg.P["v_slow"]
     hal.reset_odometer()
-    found = [False]
+    st = {"found": False, "l": None, "r": None}
 
     def cond():
         _, bits = hal.line_read()
-        if bits.get("L2x", bits["L2"]) and bits.get("R2x", bits["R2"]):
-            found[0] = True
+        odo = hal.odometer_cm()
+        # con memoria (como los cruces): cada exterior puede ver la línea en distinto momento
+        # si la línea no es perpendicular al camino (antes se pedían las dos a la vez)
+        if bits.get("L2x", bits["L2"]):
+            st["l"] = odo
+        if bits.get("R2x", bits["R2"]):
+            st["r"] = odo
+        if st["l"] is not None and st["r"] is not None and abs(st["l"] - st["r"]) <= cfg.P["cross_win"]:
+            st["found"] = True
             return True
-        return abs(hal.odometer_cm()) >= max_cm
+        return abs(odo) >= max_cm
     straight_until(cond, speed, 1.0 + max_cm / 6.0, target)
-    return found[0]
+    return st["found"]
 
 
 def detour(side=None):

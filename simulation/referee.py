@@ -141,8 +141,9 @@ class Referee:
             total += p
             out.append({"id": mid, "ok": ok, "pts": p, "t": self.done.get(mid)})
         notes = []
-        if self.touched_tower:
-            notes.append("tocó la torre")
+        cols = getattr(s, "collisions", {})
+        if cols:
+            notes.append("choques: " + ", ".join("%s %d" % (k, v) for k, v in sorted(cols.items())))
         if s.fallen:
             notes.append("CAÍDA: " + s.fallen)
         notes_tip = s.min_tip

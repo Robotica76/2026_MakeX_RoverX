@@ -111,9 +111,23 @@ def _tip_guard(left, right):
 
 
 def drive(left, right):
+    left, right = _tip_guard(left, right)
+    # prioridad a la DIRECCIÓN: si una oruga pasaría de 100 %, se bajan las dos lo mismo y la
+    # diferencia (la corrección de rumbo) se conserva. Recortar solo una dejaba casi sin
+    # corrección a potencia máxima: en la escalera el robot se desviaba y una oruga se salía de
+    # su tramo (lo mostró el simulador).
+    over = max(abs(left), abs(right)) - 100
+    if over > 0:
+        mean = (left + right) / 2.0
+        diff = (left - right) / 2.0
+        if mean > 0:
+            mean -= over
+        else:
+            mean += over
+        left = mean + diff
+        right = mean - diff
     left = clamp(left, -100, 100)
     right = clamp(right, -100, 100)
-    left, right = _tip_guard(left, right)
     mbot2.drive_power(cfg.LEFT_SIGN * left, cfg.RIGHT_SIGN * right)
 
 

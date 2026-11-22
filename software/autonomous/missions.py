@@ -74,7 +74,7 @@ L2_BACK_CM = 3.5            # nivel 2: lo mismo frente al pedestal donde se deja
 # Puntos del mapa en cm (x este desde la orilla izquierda, y SUR desde la orilla de arriba),
 # del plano reconstruido (simulation/arena.py). TODO(medir en pista).
 CORRIDOR_START = (151.9, 48.3)   # centro de giro al terminar la línea (2 cm sin línea)
-CORRIDOR_W1 = (177.1, 45.0)      # alejarse del muro de abajo (y del de la izquierda) antes de girar
+CORRIDOR_W1 = (183.0, 45.0)      # lejos del muro de abajo y del de la izquierda (aunque quede ~9 cm corto)
 CORRIDOR_TO_WALL_S = 6.0         # s al norte a v_slow: ~35 cm hasta el muro con patinaje, y empuja
 CORRIDOR_WALL_Y = 0.9 + 9.5      # y del centro de giro con el frente de las orugas en el muro
 CORRIDOR_BACK_CM = 8.0           # retroceso para girar al este (con patinaje queda >= 5 cm: holgura)
@@ -108,10 +108,12 @@ L3_PRISM_GRAB = 6.5         # avance al oeste hasta tener el prisma en la garra
 L3_PRISM_HEAD = 107         # rumbo hacia la zona punteada (con el prisma en la garra)
 L3_PRISM_CARRY = 22.0       # avance con el prisma hasta dejarlo en la zona
 L3_PRISM_LEAVE = 8.0        # retroceso después de soltarlo
-L3_TO_STAIRS_HEAD = 169     # rumbo hacia el punto al sur de la línea, frente a la escalera
-L3_TO_STAIRS_CM = 56.6
+L3_EDGE = (228.8, 70.8)     # centro de giro al salir de la zona azul (sondas en la orilla)
+L3_STAIRS_POINT = (166.1, 96.4)   # al sur del tramo recto de la línea, frente a la escalera
 PRISM_MANEUVER = [
     ("edge", "blue", "v_slow", 30, 90),      # salir de la zona azul: referencia fija
+    ("pose", L3_EDGE[0], L3_EDGE[1], 90),    # y posición conocida para la odometría (sin recortes
+                                             # en el nivel 3 la odometría es precisa)
     ("drive", 90, L3_PRISM_SOUTH),
     ("arm", "h_top"), ("head", 180),         # brazo arriba para girar sin barrer el prisma
     ("straight", -L3_PRISM_BACK, "v_slow"),
@@ -127,13 +129,17 @@ PRISM_MANEUVER = [
 TO_STAIRS = [
     ("cross", "v_slow", 15, -90), ("center",),
     ("head", 180),
+    # los ~15 cm de línea recta hasta la escalera: el seguidor corrige el desvío lateral y el
+    # rumbo promedio queda como referencia para subir (cada oruga debe ir sobre su tramo)
+    ("line_ref", 180, ("pitch",), "v_slow", 10),
 ]
 # Reintento del nivel 3 con el prisma ya en la zona: de la zona azul directo al punto frente a la
 # escalera (pasa al norte del prisma).
 L3_RETRY_TO_STAIRS = [
     ("ref", 90),
     ("edge", "blue", "v_slow", 30, 90),
-    ("drive", 156, 68.0),
+    ("pose", L3_EDGE[0], L3_EDGE[1], 90),
+    ("goto", L3_STAIRS_POINT[0], L3_STAIRS_POINT[1]),
 ]
 # Pelota (misión 8): OMITIDA por ahora (decisión del equipo). Pasos guardados para después.
 BALL_HEAD = 113
@@ -146,7 +152,8 @@ STAIRS_TOP_CM = 7.0         # nivel 4: avance desde que las sondas ven la zona v
 # Nivel 4: rodear la torre por el sur (al norte está la barra). Se vuelve a la línea con espacio
 # para girar sin barrer la torre (~13 cm de radio) y entre dos tarjetas (lo mostró el simulador).
 TOWER_DETOUR = [
-    ("drive", 110, 17),         # sur-suroeste: alejarse de la orilla del nivel 4 (a ~4 cm)
+    ("drive", 110, 20),         # sur-suroeste: lejos de la orilla del nivel 4 y, al girar al
+                                # oeste, a ~2 cm de la esquina de la torre (con 17 la tocaba)
     ("drive", 180, 41),         # oeste, paralelo a la línea, hasta pasar la torre
     ("seek", "v_slow", 25, -90),  # norte hasta la línea
     ("center",), ("head", 180),  # mirando al oeste sobre la línea (con IMU: las sondas pueden
@@ -228,7 +235,7 @@ MISSIONS = [
      # completo sobre la línea; al ver la zona verde avanza STAIRS_TOP_CM y el brazo sube sin
      # detenerse (parar en la escalera lo hacía resbalar). Termina de entrar al rodear la torre.
      "steps": [("if_skipped", 7, L3_RETRY_TO_STAIRS),
-               ("if_ran", 7, [("drive", L3_TO_STAIRS_HEAD, L3_TO_STAIRS_CM)])] + TO_STAIRS +
+               ("if_ran", 7, [("goto", L3_STAIRS_POINT[0], L3_STAIRS_POINT[1])])] + TO_STAIRS +
               [("arm", "h_climb"),
                            ("crest", STAIRS_TOP_CM, 180, "green", "h_carry")]},
 
@@ -237,10 +244,10 @@ MISSIONS = [
      # Los niveles 3 y 4 van seguidos (sin reinicio): el robot no cabe completo entre la escalera
      # y la torre, así que el nivel 3 se completa al rodearla. Tras una falla aquí se reinicia en
      # la zona verde.
-     "steps": [("ref", 180, 4),
-               # colocado en la zona verde (12.7 cm, el robot mide ~24): brazo al máximo para que
-               # la garra no toque la torre; desde ahí el rodeo es el mismo
-               ("if_start", 4, [("arm", "h_top")]),
+     # brazo al máximo (garra recogida 3 cm) antes de rodear: con el brazo a altura de carga la
+     # garra barría la torre al girar (lo mostró el simulador). Colocado en la zona verde también
+     # hace falta: ahí la garra a altura de carga ya toca la torre.
+     "steps": [("ref", 180, 4), ("arm", "h_top"),
               ] + TOWER_DETOUR},
     {"id": 11, "level": 4, "pts": 120, "name": "Colores", "critical": False,
      "steps": [("cards",)]},

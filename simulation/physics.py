@@ -49,7 +49,9 @@ class Sim:
         self.vmax = 46.0 * (1 + n * self.rng.uniform(-0.08, 0.08))    # cm/s al 100 %
         self.deadband = 4.0
         self.tau = 0.08
-        self.slip_true = 0.97 * (1 + n * self.rng.uniform(-0.03, 0.03))
+        # patinaje general del piso: el equipo lo calibra con "Probar recta 50" (P["slip"]); queda
+        # la diferencia de cada robot / piso (±3 %)
+        self.slip_true = self.body["slip"] * (1 + n * self.rng.uniform(-0.03, 0.03))
         self.skid = 1.3 * (1 + n * self.rng.uniform(-0.1, 0.1))       # orugas derrapan al girar
         self.bias = 1 + n * self.rng.uniform(-0.03, 0.03)              # una oruga más rápida
         self.gyro_drift = n * self.rng.uniform(-0.3, 0.3)              # grados/min
@@ -71,6 +73,8 @@ class Sim:
         self._slide_logged = -9.0
         self.contacts = set()           # props tocados ahora (para registrar el inicio del choque)
         self._hit_logged = {}
+        self.program_step = ""          # paso del programa en curso (lo pone run_auto / live)
+        self.collisions = {}            # choques NO intencionales por prop
         self.trac = [1.0, 1.0]          # tracción de cada oruga (1 = no patina)
         self._wall_hit = None
         # tracción de cada recorte del pasillo (cartón de 1 cm, suelto): 0.35..0.75
@@ -427,7 +431,11 @@ class Sim:
             hit.add("borde de nivel")
         for name in hit - self.contacts:
             if self.world.t - self._hit_logged.get(name, -9) > 1.0:
-                self.log.append((self.world.t, "choque: " + name))
+                if name == "muro" and self.program_step == "square":
+                    self.log.append((self.world.t, "se apoya en el muro (escuadrar, a propósito)"))
+                else:
+                    self.log.append((self.world.t, "choque: " + name))
+                    self.collisions[name] = self.collisions.get(name, 0) + 1
             self._hit_logged[name] = self.world.t
         self.contacts = hit
         return bool(hit)

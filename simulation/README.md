@@ -75,6 +75,9 @@ pasillo y el tope desvían el rumbo al pisarlos.
 | **Volcadura**: la subida gradual de potencia casi no cambia el margen; lo que manda es la inclinación con la altura del centro de masa | brazo bajo y al frente en cada pendiente (`h_climb`): margen 1.8 → 3.9 cm (centro de masa a 11 cm, rampa 35°). Recortar la potencia en pendiente fuerte dejaba al robot parado a media rampa de 40°: se quitó. Limitar la potencia de cada oruga frenaba la dirección: solo se limita el avance |
 | **Zona de obstáculos con patinaje**: la oruga que pisa un recorte pierde tracción y el encoder cuenta de más; con tramos por distancia el robot se quedaba corto y chocaba (5 %) | odometría encoders + giroscopio (`odometry.py`: detecta qué oruga patinó y mide con la otra, adelante y en reversa), escuadrarse contra el muro de arriba **por tiempo** (y exacta), seguir rectas del mapa corrigiendo el desvío lateral (`track_line`) y tomar la diagonal sin girar en el lugar: **88 %** |
 | Rampa: con poca potencia el robot se quedaba a media subida | asistencia de subida (`slope_min_v`, `slope_boost`): si inclinado casi no avanza o se resbala, la potencia sube de a poco |
+| **Revisión de choques** (10–20 corridas con ruido): pedestal de la pelota al girar antes de la escalera (6/10), torre en el rodeo (4/10), muros del pasillo | punto de cruce sobre el tramo recto y a 18 cm del pedestal, con odometría en el nivel 3 (`pose` al salir de la zona azul + `goto`); brazo arriba antes de rodear la torre y primer tramo de 20 cm; primer punto del pasillo 6 cm más al este. Quedan solo los apoyos intencionales en el muro (se registran como "se apoya en el muro") y 3/20 contra el muro en la salida |
+| `hal.drive` recortaba la oruga que pasaba de 100 % y a potencia máxima casi no quedaba corrección de rumbo (escalera) | baja las dos orugas lo mismo y conserva la diferencia |
+| Cruce con línea no perpendicular (curva) no se detectaba | `cross` con memoria: cada exterior puede verla en distinto momento |
 | Rodeo de la torre: el giro en el lugar barría la torre (~13 cm de radio) o volvía sobre una tarjeta | `TOWER_DETOUR` con rumbos absolutos, regreso entre dos tarjetas |
 
 ## Estrategia que se simula
@@ -95,6 +98,10 @@ pasillo y el tope desvían el rumbo al pisarlos.
 Monte Carlo de la estrategia completa, 20 corridas con ruido y patinaje en los recortes, desde el
 nivel 1 (antes del patinaje la zona 5 daba 100 %; ahora 90 %): M1 a M4 100 %,
 zona 5 y nivel 3 90 %, prisma 90 %, escalera, torre y colores 85 %, meta 80 %; mediana 980.
+
+**Escalera**: cada oruga solo tolera ±1.6 cm de desvío respecto a su tramo; con 2° de error de
+rumbo (promediado en solo 8 cm de línea recta antes de la escalera) la deriva al subir llega
+cerca del límite. Medir en la pista la separación real de los tramos y el ancho de las orugas.
 
 **Límites conocidos**: si las DOS orugas patinan a la vez, o el robot gira en el lugar con una
 oruga sobre un recorte, ningún sensor interno lo detecta (por eso la referencia es el muro). En
