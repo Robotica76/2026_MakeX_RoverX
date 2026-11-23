@@ -78,12 +78,37 @@
             <select id="nlevel"><option value="1">nivel 1</option><option value="2">nivel 2</option><option value="3">nivel 3</option><option value="4">nivel 4</option></select>
             <input id="nseed" type="number" value="0" style="width:52px" title="semilla">
             <select id="nnoise"><option value="0">sin ruido</option><option value="1">con ruido</option></select>
+            <select id="nmode" title="programa que corre el robot">
+              <option value="comp">competencia</option><option value="manual">solo manual</option>
+              <option value="user">programa subido</option>
+            </select>
             <button id="lnew">Nueva corrida</button>
+          </span>
+          <span>
+            <input id="lfile" type="file" accept=".py,.mblock" style="max-width:190px">
+            <button id="lupload">Subir y correr</button>
+            <span id="lprog" class="legend"></span>
           </span>
         </div>
       </div>
       <div id="lcyber" style="margin-top:8px;font:13px ui-monospace,Menlo,monospace;background:#0e1116;color:#9fe7a4;border-radius:6px;padding:6px 10px;white-space:pre"></div>
       <div id="lstate" class="legend"></div>
+      <details id="padbox" style="margin-top:8px">
+        <summary style="cursor:pointer;font-weight:700">Control Bluetooth de Makeblock (emulado) · parte manual</summary>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-top:6px">
+          <svg id="pad" viewBox="185 228 380 300" style="width:min(560px,100%);background:#1b2028;border-radius:10px;touch-action:none;user-select:none"></svg>
+          <div class="legend" style="max-width:330px;line-height:1.5">
+            <b>Ratón</b>: clic en los botones (se iluminan mientras se mantienen), arrastrar los
+            joysticks (regresan al centro al soltar), interruptor On/Off.<br>
+            <b>Teclado</b>: W/S joystick izq. ↕ · J/L joystick der. ↔ · I/K joystick der. ↕ ·
+            flechas = cruceta · Q/E = L1/L2 · U/O = R1/R2 · 1-4 = botones 1-4 ·
+            Mayús = joysticks a la mitad.<br>
+            <b>Control real</b> conectado a la PC (USB/Bluetooth): se usa solo (Gamepad API).<br>
+            En el programa de competencia: A en la pantalla de inicio = control manual.
+            <div id="padstate" style="margin-top:6px;font:12px ui-monospace,Menlo,monospace"></div>
+          </div>
+        </div>
+      </details>
     </div>
     <canvas id="cv" width="1200" height="620"></canvas>
     <div class="controls">
@@ -551,10 +576,159 @@ if (D.live) {
   document.getElementById("lpause").onclick = () => post("/pause");
   document.getElementById("lspeed").onchange = e => post("/speed?v=" + e.target.value);
   document.getElementById("lnew").onclick = () => {
-    const q = `level=${nlevel.value}&seed=${nseed.value}&noise=${nnoise.value}`;
+    const q = `level=${nlevel.value}&seed=${nseed.value}&noise=${nnoise.value}&mode=${nmode.value}`;
     post("/new?" + q).then(() => location.reload());
   };
   nlevel.value = D.params.level; nseed.value = D.params.seed; nnoise.value = D.params.noise ? 1 : 0;
+  nmode.value = D.params.mode || "comp";
+  if (!D.params.program) nmode.querySelector('option[value="user"]').disabled = true;
+  document.getElementById("lprog").textContent =
+    D.params.mode === "user" ? "corriendo: " + D.params.program : D.params.mode === "manual" ? "solo control manual" : "programa de competencia";
+  document.getElementById("lupload").onclick = async () => {
+    const f = lfile.files[0];
+    if (!f) { alert("Elige un archivo .py o .mblock"); return; }
+    const q = `name=${encodeURIComponent(f.name)}&level=${nlevel.value}&seed=${nseed.value}&noise=${nnoise.value}`;
+    const r = await fetch("/upload?" + q, { method: "POST", body: await f.arrayBuffer() });
+    const j = await r.json();
+    if (j.error) { alert("No se pudo correr " + f.name + ":\n" + j.error); return; }
+    location.reload();
+  };
+  if (D.params.mode === "manual") document.getElementById("padbox").open = true;
+
+  // ---------------------------------------------------------- control Bluetooth emulado
+  // Misma distribución que el control de Makeblock (y que el emulador del repo Challengue):
+  // L1/L2/R2/R1 arriba, cruceta, Menú / Bluetooth / +, botones 1-4, dos joysticks, LED y On/Off.
+  // Nombres que lee el programa (mbuild gamepad): Up Down Left Right N1-N4 L1 L2 R1 R2, ejes
+  // Lx Ly Rx Ry en -100..100 (Ly + = adelante).
+  (function gamepadEmu() {
+    const svg = document.getElementById("pad"), NS = "http://www.w3.org/2000/svg";
+    const el = (tag, at, parent) => { const e = document.createElementNS(NS, tag); for (const k in at) e.setAttribute(k, at[k]); (parent || svg).appendChild(e); return e; };
+    const PADC = { body: "#eceef3", edge: "#c4c8d2", shoulder: "#d4d7de", key: "#262930", on: "#3ddc97", txt: "#eceef3" };
+    // cuerpo: parte de arriba redondeada + dos agarraderas
+    el("circle", { cx: 249, cy: 427, r: 50, fill: PADC.body, stroke: PADC.edge, "stroke-width": 1.2 });
+    el("circle", { cx: 491, cy: 427, r: 50, fill: PADC.body, stroke: PADC.edge, "stroke-width": 1.2 });
+    el("rect", { x: 195, y: 262, width: 350, height: 140, rx: 28, fill: PADC.body, stroke: PADC.edge, "stroke-width": 1.2 });
+    el("rect", { x: 230, y: 380, width: 280, height: 60, fill: PADC.body });
+    el("text", { x: 370, y: 285, "text-anchor": "middle", "font-size": 8, "font-weight": 700, fill: "#aaaeb8", "font-family": "sans-serif" }).textContent = "makeblock";
+    const d = 18, C = [
+      ["L1", "L1", "rect", 258, 252, 54, 12], ["L2", "L2", "rect", 318, 251, 36, 10],
+      ["R2", "R2", "rect", 422, 251, 36, 10], ["R1", "R1", "rect", 482, 252, 54, 12],
+      ["Up", "▲", "rect", 262, 322 - d, d, d], ["Down", "▼", "rect", 262, 322 + d, d, d],
+      ["Left", "◀", "rect", 262 - d, 322, d, d], ["Right", "▶", "rect", 262 + d, 322, d, d],
+      ["Menu", "≡", "circle", 343, 322, 14], ["Bluetooth", "B", "circle", 370, 322, 14], ["Plus", "+", "circle", 398, 322, 14],
+      ["N2", "2", "circle", 472, 294, 24], ["N1", "1", "circle", 446, 321, 24],
+      ["N4", "4", "circle", 499, 321, 24], ["N3", "3", "circle", 472, 348, 24],
+    ];
+    el("rect", { x: 262 - d / 2, y: 322 - d / 2, width: d, height: d, fill: PADC.key });   // centro de la cruceta
+    const st = { on: true, mouse: new Set(), keys: new Set(), sticks: { L: [0, 0], R: [0, 0] }, kb: { L: [0, 0], R: [0, 0] }, gp: null };
+    const shapes = {};
+    for (const [name, label, shape, x, y, w, h] of C) {
+      const g = el("g", { style: "cursor:pointer" });
+      const shoulder = name[0] === "L" || name[0] === "R" && name.length === 2;
+      const s = shape === "circle"
+        ? el("circle", { cx: x, cy: y, r: w / 2, fill: PADC.key }, g)
+        : el("rect", { x: x - w / 2, y: y - h / 2, width: w, height: h, rx: shoulder ? 4 : 2, fill: shoulder ? PADC.shoulder : PADC.key, stroke: shoulder ? "#b0b4be" : "none" }, g);
+      el("text", { x: x, y: y + (shape === "circle" ? w * 0.18 : h * 0.3), "text-anchor": "middle", "font-size": shape === "circle" ? w * 0.5 : Math.min(h, 10) * 0.8,
+                   "font-weight": 700, fill: shoulder ? "#262930" : PADC.txt, "font-family": "sans-serif", "pointer-events": "none" }, g).textContent = label;
+      shapes[name] = { s, base: s.getAttribute("fill") };
+      const down = (e) => { e.preventDefault(); if (!st.on) return; st.mouse.add(name); send(); };
+      const up = () => { if (st.mouse.delete(name)) send(); };
+      g.addEventListener("pointerdown", down); g.addEventListener("pointerup", up); g.addEventListener("pointerleave", up);
+    }
+    // joysticks
+    const knobs = {};
+    for (const [side, cx] of [["L", 322], ["R", 418]]) {
+      el("circle", { cx, cy: 382, r: 22, fill: "#c4c8d2" });
+      const k = el("circle", { cx, cy: 382, r: 15, fill: PADC.key, stroke: "#11141a", "stroke-width": 2, style: "cursor:grab" });
+      knobs[side] = { k, cx, cy: 382 };
+      k.addEventListener("pointerdown", (e) => {
+        if (!st.on) return;
+        k.setPointerCapture(e.pointerId);
+        const move = (ev) => {
+          const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+          const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+          let dx = p.x - cx, dy = p.y - 382; const m = Math.hypot(dx, dy), R = 12;
+          if (m > R) { dx *= R / m; dy *= R / m; }
+          st.sticks[side] = [dx / R, -dy / R]; send();
+        };
+        const end = () => { st.sticks[side] = [0, 0]; k.removeEventListener("pointermove", move); k.removeEventListener("pointerup", end); send(); };
+        k.addEventListener("pointermove", move); k.addEventListener("pointerup", end);
+      });
+    }
+    // indicador y On/Off
+    const led = el("circle", { cx: 370, cy: 384, r: 4, fill: "#5b9cf0" });
+    const sw = el("g", { style: "cursor:pointer" });
+    el("rect", { x: 350, y: 497, width: 40, height: 16, rx: 8, fill: "#c4c8d2" }, sw);
+    const swk = el("circle", { cx: 382, cy: 505, r: 6.5, fill: PADC.on }, sw);
+    const swt = el("text", { x: 398, y: 509, "font-size": 10, "font-weight": 700, fill: "#eceef3", "font-family": "sans-serif" }, svg);
+    swt.textContent = "ON";
+    el("text", { x: 300, y: 509, "font-size": 8, fill: "#9aa3ad", "font-family": "sans-serif", "text-anchor": "end" }).textContent = "On / Off (atrás)";
+    sw.addEventListener("click", () => { st.on = !st.on; st.mouse.clear(); send(); });
+    // teclado
+    const KEYMAP = { ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", q: "L1", e: "L2", u: "R1", o: "R2", "1": "N1", "2": "N2", "3": "N3", "4": "N4" };
+    const held = new Set();
+    const typing = (ev) => /INPUT|SELECT|TEXTAREA/.test((ev.target || {}).tagName || "");
+    window.addEventListener("keydown", (ev) => {
+      if (typing(ev) || !document.getElementById("padbox").open) return;
+      const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
+      if (KEYMAP[k] || "wsjlik".includes(k) && k.length === 1) { held.add(k); ev.preventDefault(); kbUpdate(ev.shiftKey); }
+    });
+    window.addEventListener("keyup", (ev) => {
+      const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
+      if (held.delete(k)) kbUpdate(ev.shiftKey);
+    });
+    function kbUpdate(half) {
+      const g = half ? 0.5 : 1;
+      st.keys = new Set([...held].map(k => KEYMAP[k]).filter(Boolean));
+      st.kb.L = [0, ((held.has("w") ? 1 : 0) - (held.has("s") ? 1 : 0)) * g];
+      st.kb.R = [((held.has("l") ? 1 : 0) - (held.has("j") ? 1 : 0)) * g, ((held.has("i") ? 1 : 0) - (held.has("k") ? 1 : 0)) * g];
+      send();
+    }
+    // control real (Gamepad API): ejes 0-3 y botones típicos
+    window.addEventListener("gamepadconnected", () => { if (!gpTimer) gpTimer = setInterval(pollGP, 50); });
+    let gpTimer = null, lastGP = "";
+    function pollGP() {
+      const gp = (navigator.getGamepads ? navigator.getGamepads() : []).find(g => g);
+      if (!gp) { st.gp = null; return; }
+      const ax = (i) => Math.abs(gp.axes[i] || 0) > 0.08 ? gp.axes[i] : 0;
+      const b = (i) => gp.buttons[i] && gp.buttons[i].pressed;
+      const keys = [];
+      [["N1", 0], ["N2", 1], ["N3", 2], ["N4", 3], ["L1", 4], ["R1", 5], ["L2", 6], ["R2", 7], ["Up", 12], ["Down", 13], ["Left", 14], ["Right", 15]]
+        .forEach(([n, i]) => { if (b(i)) keys.push(n); });
+      st.gp = { L: [ax(0), -ax(1)], R: [ax(2), -ax(3)], keys };
+      const sig = JSON.stringify(st.gp);
+      if (sig !== lastGP) { lastGP = sig; send(); }
+    }
+    // estado combinado -> servidor
+    function combined() {
+      const keys = new Set([...st.mouse, ...st.keys, ...(st.gp ? st.gp.keys : [])]);
+      const pick = (side, i) => {
+        const v = [st.sticks[side][i], st.kb[side][i], st.gp ? st.gp[side][i] : 0];
+        return v.reduce((a, x) => Math.abs(x) > Math.abs(a) ? x : a, 0);
+      };
+      return { on: st.on, keys: [...keys], Lx: Math.round(pick("L", 0) * 100), Ly: Math.round(pick("L", 1) * 100),
+               Rx: Math.round(pick("R", 0) * 100), Ry: Math.round(pick("R", 1) * 100) };
+    }
+    let lastSent = "";
+    function send(force) {
+      const c = combined();
+      for (const n in shapes) shapes[n].s.setAttribute("fill", c.keys.includes(n) ? PADC.on : shapes[n].base);
+      for (const side of ["L", "R"]) {
+        const x = c[side + "x"] / 100 * 12, y = -c[side + "y"] / 100 * 12;
+        knobs[side].k.setAttribute("cx", knobs[side].cx + x); knobs[side].k.setAttribute("cy", knobs[side].cy + y);
+      }
+      led.setAttribute("fill", st.on ? "#5b9cf0" : "#7a808c");
+      swk.setAttribute("cx", st.on ? 382 : 358); swk.setAttribute("fill", st.on ? PADC.on : "#7a808c"); swt.textContent = st.on ? "ON" : "OFF";
+      document.getElementById("padstate").textContent =
+        `teclas [${c.keys.join(" ")}]  izq (${c.Lx}, ${c.Ly})  der (${c.Rx}, ${c.Ry})`;
+      const sig = JSON.stringify(c);
+      if (sig === lastSent && !force) return;
+      lastSent = sig;
+      fetch("/pad", { method: "POST", body: sig }).catch(() => {});
+    }
+    setInterval(() => send(true), 500);      // repite el estado (por si se pierde un mensaje)
+    send(true);
+  })();
   let nev = 0, busy = false;
   async function poll() {
     if (busy) return; busy = true;

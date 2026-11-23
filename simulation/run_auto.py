@@ -106,6 +106,8 @@ def run_once(level=1, seed=0, noise=0.0, line_w=2.0, prog=None, true=None, budge
     log = []
     sim = physics.Sim(world, cfg, geo, arena, level=level, noise=noise, seed=seed,
                       true_overrides=true, log=log)
+    # como main(): al encender, gripper.home() deja el brazo en posición de viaje
+    world.servos[cfg.SERVO_ARM] = geo.arm_servo(cfg.P["h_top"])
     ref = referee.Referee(sim, ms.MISSIONS, level)
     frames = []
     label = {"m": ""}

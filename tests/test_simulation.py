@@ -102,3 +102,53 @@ def test_calibrations_program_runs_sequence(monkeypatch):
     # círculo hacia la izquierda (al sur, mirando al oeste): centro en (-30, 0), radio 20
     assert min(p[0] for p in pts) == pytest.approx(-50, abs=4)
     assert min(p[1] for p in pts) == pytest.approx(-20, abs=4)
+
+
+def test_upload_reads_python_from_mblock():
+    import userprog
+    data = (ROOT / "software" / "robot" / "calibrations.mblock").read_bytes()
+    src, desc = userprog.source_from_upload("calibrations.mblock", data)
+    assert "def circulo" in src and "calibrations" in desc
+    src2, _ = userprog.source_from_upload("x.py", b"print('hola')\n")
+    assert src2.startswith("print")
+    with pytest.raises(ValueError):
+        userprog.source_from_upload("malo.mblock", b"PKno es zip")
+
+
+def test_uploaded_event_program_runs_with_buttons(monkeypatch):
+    """Un programa con @event (como el del compañero) corre en el simulador en vivo: el botón A
+    dispara su manejador y la consola del CyberPi llega a los eventos."""
+    import threading
+    import live
+    import userprog
+    real = lambda s: threading.Event().wait(s)      # conftest cambia time.sleep antes de importar
+    monkeypatch.setattr(userprog, "REAL_SLEEP", real)
+    monkeypatch.setattr(live, "REAL_SLEEP", real)
+    src = (
+        "import event, time, cyberpi, mbot2\n"
+        "@event.start\n"
+        "def on_start():\n"
+        "    cyberpi.console.println('LISTO')\n"
+        "@event.is_press('a')\n"
+        "def go():\n"
+        "    mbot2.EM_set_speed(40, 'EM1'); mbot2.EM_set_speed(-40, 'EM2')\n"
+        "    time.sleep(1.0)\n"
+        "    mbot2.EM_stop('EM1'); mbot2.EM_stop('EM2')\n"
+        "    cyberpi.console.println('FIN')\n"
+    )
+    s = live.new_session(level=1, seed=0, noise=0.0, source=src, prog_name="prueba.py")
+    try:
+        s.speed = 50.0
+        live.REAL_SLEEP(0.3)
+        x0 = s.sim.y
+        s.press("a", hold=0.2)
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < 10 and not any("FIN" in e for _, e in s.log):
+            live.REAL_SLEEP(0.05)
+        msgs = [e for _, e in s.log]
+        assert "CyberPi: LISTO" in msgs and "CyberPi: FIN" in msgs, msgs
+        assert abs(s.sim.y - x0) > 3          # avanzó
+    finally:
+        s.stop = True
+        s.runner.stop = True
+        s.thread.join(timeout=3)

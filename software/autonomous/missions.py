@@ -69,6 +69,7 @@ L1_TO_RAMP_CM = 18.7        # de ahí al pie de la rampa gris
 # ---- constantes de ruta (TODO: AJUSTAR EN PISTA; salen del plano y se probaron en el simulador)
 L1_BACK_CM = 4.5            # nivel 1: retroceso tras el cubo para poder girar sin barrer el pedestal
 L2_TO_PED_CM = 9.6          # TODO(pista) nivel 2: línea desde la T hasta la garra sobre el pedestal
+L2_T_BACK_CM = 3.0          # TODO(pista) nivel 2: retroceso en la T antes de girar al sur
 L2_BACK_CM = 6.0            # nivel 2: lo mismo frente al pedestal donde se deja el cubo
 # Rumbos de mapa (pasos "ref" y "head"): 0 = este, 90 = sur, 180 = oeste, -90 = norte, en la
 # vista superior del reglamento. Se fijan con "ref" sobre una recta conocida.
@@ -79,11 +80,13 @@ L2_BACK_CM = 6.0            # nivel 2: lo mismo frente al pedestal donde se deja
 # curva (rumbo CORRIDOR_START_HEAD) y se entra por el centro de la abertura con odometría.
 CORRIDOR_START_HEAD = 45         # rumbo de mapa a media curva (de sur a este)
 CORRIDOR_START = (135.9, 44.6)   # TODO(pista) centro de giro al pasar por ese rumbo
-CORRIDOR_W1 = (183.0, 45.0)      # lejos del muro de abajo y del de la izquierda (aunque quede ~9 cm corto)
+CORRIDOR_W1 = (183.0, 42.5)      # TODO(pista) a 17 cm del muro de abajo (la nariz barre 16 cm al girar).
+                                 # Los recortes junto al muro de arriba (x 175..190) ocupan 15.3 cm, casi el
+                                 # hueco entre orugas (15.35): ningún punto deja las orugas fuera al girar
 CORRIDOR_TO_WALL_S = 6.0         # s al norte a v_slow: ~35 cm hasta el muro con patinaje, y empuja
 CORRIDOR_WALL_Y = 0.9 + 11.85    # y del centro de giro con la nariz en el muro (geo.track_front())
-CORRIDOR_BACK_CM = 5.5         # retroceso para girar al este: la nariz barre 16 cm de radio (muro a >= 0.5)
-CORRIDOR_EXIT_DY = 1.5         # recta de salida a y 14.25: toma la diagonal de la línea y no la vertical (holgura 2.6 N, 5.5 S)
+CORRIDOR_BACK_CM = 7.0         # retroceso para girar al este: la nariz barre 16 cm de radio (muro a >= 0.5)
+CORRIDOR_EXIT_DY = 3.25        # recta de salida a y 16: centro de la abertura y toma la diagonal de la línea
 # Nivel 2: cruzar la zona de obstáculos (sin línea) de la entrada (abajo a la izquierda) a la
 # salida (arriba a la derecha). Al girar en el lugar el robot barre ~13 cm y la línea termina a
 # 12 cm del muro de abajo, así que el primer giro es suave (lo mostró el simulador).
@@ -161,10 +164,16 @@ BALL_STEPS = [("line", ("color", "red"), "v_slow", 20), ("center",),
 STAIRS_TOP_CM = 8.0         # nivel 4: avance desde que las sondas ven la zona verde (TODO pista)
 # Nivel 4: rodear la torre por el sur (al norte está la barra). Se vuelve a la línea con espacio
 # para girar sin barrer la torre (~13 cm de radio) y entre dos tarjetas (lo mostró el simulador).
+# Al volver a la línea la nariz (16 cm de radio al girar) debe librar la torre: centro a >= 17 cm
+# de su cara oeste. La sonda queda 5.2 cm adelante: la tarjeta más cercana a la torre queda
+# detrás y se lee retrocediendo CARDS_BACK_CM (misión 11).
+TOWER_WEST_CM = 37.0        # TODO(pista)
+CARDS_BACK_CM = 7.0         # TODO(pista) la cola queda a ~1.5 cm de la torre
 TOWER_DETOUR = [
     ("drive", 110, 20),         # sur-suroeste: lejos de la orilla del nivel 4 y, al girar al
                                 # oeste, a ~2 cm de la esquina de la torre (con 17 la tocaba)
-    ("drive", 180, 41),         # oeste, paralelo a la línea, hasta pasar la torre
+    ("drive", 180, TOWER_WEST_CM),  # oeste, paralelo a la línea, hasta pasar la torre (vuelve
+                                    # a la línea lo más cerca posible: la 1a tarjeta está ahí)
     ("seek", "v_slow", 25, -90),  # norte hasta la línea
     ("center",), ("head", 180),  # mirando al oeste sobre la línea (con IMU: las sondas pueden
                                  # quedar sobre una tarjeta que tapa la línea)
@@ -230,7 +239,9 @@ MISSIONS = [
     {"id": 5, "level": 2, "pts": 100, "name": "Zona obstaculos", "critical": True,
      # recién colocado en la zona amarilla (reinicio o arranque en el nivel 2): sondas sobre la
      # T mirando al este, girar al sur hacia el pasillo
-     "steps": [("if_placed", [("ref", 0), ("jturn", 90)]),
+     # al girar sobre la T la nariz barre 16 cm y el muro del pasillo está a ~17: se retrocede
+     # antes (con ruido chocaba 11 de 12 veces); el giro busca la línea igual
+     "steps": [("if_placed", [("ref", 0), ("straight", -L2_T_BACK_CM, "v_slow"), ("jturn", 90)]),
                ("line", ("head", CORRIDOR_START_HEAD, 6), "v_slow", 15)] + CORRIDOR},
     {"id": 6, "level": 2, "pts": 100, "name": "Subir nivel 3", "critical": True, "end_level": True,
      # sigue la línea por la rampa blanca hasta salir de la zona azul (ya completamente dentro)
@@ -267,7 +278,7 @@ MISSIONS = [
      "steps": [("ref", 180, 4), ("arm", "h_top"),
               ] + TOWER_DETOUR},
     {"id": 11, "level": 4, "pts": 120, "name": "Colores", "critical": False,
-     "steps": [("cards",)]},
+     "steps": [("cards", CARDS_BACK_CM)]},
     # misión 12 (pelota en la casilla roja) omitida: necesita la pelota de la misión 8
     {"id": 13, "level": 4, "pts": 100, "name": "Meta azul", "critical": False,
      "steps": [("stop_in", "blue")]},

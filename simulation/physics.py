@@ -131,7 +131,8 @@ class Sim:
                                         z=a.height((p2[0] + p2[2]) / 2, (p2[1] + p2[3]) / 2)
                                         + ar.PEDESTAL_H + ar.CUBE_SIZE / 2, on="pedestal2")
         # al reiniciar en el nivel 4 se carga la pelota (misión 8 omitida por ahora)
-        self.start_held = {4: "ball"}.get(level)
+        # la pelota (misiones 8 y 12) está omitida en la estrategia: no se arranca con ella
+        self.start_held = None
         self.held = None
         self._servos = {}
         self.on_frame = None            # función llamada cada FRAME_S de tiempo simulado

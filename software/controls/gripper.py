@@ -27,8 +27,9 @@ def arm_to(h):
 
 
 def home():
-    """Posición de viaje: brazo arriba, garra abierta."""
-    arm_to(cfg.P["h_carry"])
+    """Posición de viaje: brazo a 90° (garra sobre la nariz, lo más compacto para colocar el
+    robot en las zonas de inicio, que son más chicas que él), garra abierta."""
+    arm_to(cfg.P["h_top"])
     open_claw()
 
 

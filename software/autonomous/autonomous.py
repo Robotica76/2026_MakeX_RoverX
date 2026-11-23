@@ -87,10 +87,48 @@ def red_index(found):
     return -1
 
 
-def scan_cards():
-    """Sigue la línea despacio y registra cada tarjeta de color (color + odometría)."""
+def _note_card(c, odo):
+    """Registra la tarjeta si no es una ya vista (mismo color a menos de 6 cm: la tarjeta mide
+    4.7 cm y al retroceder y volver a pasar se lee en sus dos orillas)."""
+    for c0, o0 in cards:
+        if c0 == c and abs(o0 - odo) < 6:
+            return False
+    cards.append((c, odo))
+    colors.show(c)
+    return True
+
+
+def _scan_back(back_cm):
+    """Retrocede recto (rumbo con el giroscopio) leyendo tarjetas: al volver a la línea
+    después de rodear la torre, la sonda ya pasó la primera tarjeta."""
+    start = hal.odo_abs()
+    h0 = hal.heading()
+    t0 = hal.now()
+    last, same = "white", 0
+    v = cfg.P["v_slow"]
+    while start - hal.odo_abs() < back_cm and hal.now() - t0 < 4:
+        if hal.abort_requested():
+            break
+        c = colors.read(cfg.CARD_PROBE)
+        if c == last:
+            same += 1
+        else:
+            last, same = c, 1
+        if same == cfg.COLOR_CONFIRM and colors.is_card_color(c):
+            _note_card(c, hal.odo_abs())
+        corr = hal.clamp(cfg.P["head_kp"] * (h0 - hal.heading()), -15, 15)
+        hal.drive(-v + corr, -v - corr)
+        hal.wait(cfg.LOOP_DT)
+    hal.stop()
+
+
+def scan_cards(back_cm=0):
+    """Sigue la línea despacio y registra cada tarjeta de color (color + odometría).
+    back_cm: antes, retrocede eso leyendo (tarjetas que quedaron detrás de la sonda)."""
     global cards
     cards = []
+    if back_cm > 0:
+        _scan_back(back_cm)
     lf.reset()
     start = hal.odo_abs()
     t0 = hal.now()
@@ -119,14 +157,15 @@ def scan_cards():
             same = 1
         odo = hal.odo_abs()
         if same == cfg.COLOR_CONFIRM and colors.is_card_color(c):
-            if not cards or cards[-1][0] != c or odo - cards[-1][1] > 6:
-                cards.append((c, odo))
-                colors.show(c)
-                if len(cards) >= cfg.CARD_COUNT:
-                    break
+            # no se para al contar CARD_COUNT: la última tarjeta (azul) está junto a la meta azul
+            # y parar encima de ella hacía que stop_in la tomara por la meta
+            _note_card(c, odo)
         lf.step(cfg.P["v_slow"])
         hal.wait(cfg.LOOP_DT)
     hal.stop()
+    if goal_entry is not None and goal_entry >= start:   # meta confirmada en esta lectura:
+        cards = [k for k in cards if k[1] < goal_entry - 1]  # su azul no es una tarjeta
+    cards.sort(key=lambda k: k[1])          # en orden a lo largo de la línea (odometría)
     return len(cards) > 0
 
 
@@ -381,7 +420,8 @@ def run_step(step):
     if kind == "detour":
         return motion.detour(step[1])
     if kind == "cards":
-        return scan_cards()
+        # ("cards"[, retroceso cm]): primero retrocede leyendo (tarjetas que quedaron atrás)
+        return scan_cards(val(step[1]) if len(step) > 1 else 0)
     if kind == "drop_red":
         return drop_red()
     if kind == "stop_in":

@@ -150,7 +150,8 @@ def track(x0, y0, hdg, speed=None, timeout=5.0, max_cm=None, stop=None):
         if max_cm is not None and (_x - sx) * ux + (_y - sy) * uy >= max_cm:
             break
         cross = ux * (_y - y0) - uy * (_x - x0)       # + = a la derecha de la recta
-        want = hdg - hal.clamp(cfg.P["track_k"] * cross, -30, 30)
+        lim = cfg.P.get("track_max", 30)
+        want = hdg - hal.clamp(cfg.P["track_k"] * cross, -lim, lim)
         err = wrap(want - heading())
         corr = cfg.P["head_kp"] * err
         hal.drive(speed + corr, speed - corr)

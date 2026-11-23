@@ -66,6 +66,8 @@ P = {
     "skid": 1.3,             # TODO(calibrar) derrape al girar: B efectivo = distancia entre orugas * skid
                              # (girar 360° en el lugar: grados de encoder vs giroscopio)
     "slip_tol": 0.05,
+    "track_max": 15.0,       # grados máximos de corrección al volver a la recta (con 30 la esquina
+                             # delantera tocaba el muro del pasillo al salir)
     "track_k": 4.0,          # grados de corrección de rumbo por cm de desvío lateral (odometry.track)        # grados por ciclo de diferencia giroscopio/encoders para sospechar patinaje
     "slip": 1.0,             # TODO(calibrar con "Probar recta 50") distancia real / teórica
 
@@ -195,12 +197,15 @@ COLOR_REF = {
     "purple": (140, 60, 170),
 }
 COLOR_CONFIRM = 3        # lecturas iguales seguidas para aceptar un color
-CARD_PROBE = "R2"        # sonda que pasa sobre las tarjetas
+CARD_PROBE = "R1"        # sonda que lee las tarjetas: una CENTRAL (0.6 cm del centro). Las tarjetas miden
+                         # 7 cm a lo ancho de la línea (±3.5); R2 está a 3.0 cm (medido) y con 1 cm de
+                         # desvío ya leía fuera. TODO(pista): ¿tarjetas sobre la línea o al lado?
 CARD_COUNT = 6
 CARD_SCAN_MAX_CM = 120
 ZONE_LEVEL = {"red": 1, "yellow": 2, "blue": 3, "green": 4}
 GOAL_COLOR = "blue"
-GOAL_RUN_CM = 6.0        # azul seguido más largo que una tarjeta = la X de la meta
+GOAL_RUN_CM = 9.0        # azul seguido más largo que una tarjeta = la X de la meta (tarjeta 4.7 cm; con
+                         # 6 una tarjeta leída en diagonal pasaba por meta; la meta mide ~25 cm)
 
 # ---------------------------------------------------------------- tiempos
 TURN_SETTLE_S = 0.15

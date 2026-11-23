@@ -156,7 +156,9 @@ START_POSES_PX = {                       # (x, y, rumbo en grados en el marco en
     1: (73.5, 80, -90),
     2: (579, 155, 0),          # sondas sobre la T, como al llegar por la rampa
     3: (995, 312, -90),
-    4: (514, 415, 180),
+    4: (525, 415, 180),        # la zona verde (12.7 cm) es más chica que el robot (20.3): mirando
+                               # al oeste con la cola sobre el último escalón, como al subir
+                               # (centrado en la zona la nariz queda a 2 cm de la torre)
 }
 
 

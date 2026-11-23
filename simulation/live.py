@@ -34,6 +34,7 @@ import arena as ar
 import physics
 import referee
 import viewer
+import userprog
 
 REAL_SLEEP = time.sleep
 
@@ -43,7 +44,10 @@ class Stop(BaseException):
 
 
 class Session:
-    def __init__(self, level=1, seed=0, noise=0.0, line_w=2.0):
+    def __init__(self, level=1, seed=0, noise=0.0, line_w=2.0, mode="comp", source=None,
+                 prog_name=None):
+        # mode: "comp" = programa de competencia, "manual" = solo control manual (gamepad),
+        # "user" = programa subido por el usuario (source)
         import copy
         cfg.P.clear()
         cfg.P.update(copy.deepcopy(ra.P0))
@@ -57,7 +61,11 @@ class Session:
         except OSError:
             pass
         self.level = level
-        self.params = {"level": level, "seed": seed, "noise": noise, "line_w": line_w}
+        self.mode = mode if source is None else "user"
+        self.source = source
+        self.prog_name = prog_name or ""
+        self.params = {"level": level, "seed": seed, "noise": noise, "line_w": line_w,
+                       "mode": self.mode, "program": self.prog_name}
         self.arena = ar.Arena(line_w=line_w, seed=seed)
         self.log = []
         self.sim = physics.Sim(world, cfg, geo, self.arena, level=level, noise=noise, seed=seed,
@@ -78,6 +86,7 @@ class Session:
         self.placed_at = None
         self.results = []
         self.sim.on_frame = self._on_frame
+        self.runner = None
         self.thread = threading.Thread(target=self._run, daemon=True)
 
     # ------------------------------------------------------------ reloj y cuadros
@@ -164,6 +173,85 @@ class Session:
         return ns["main"]
 
     def _run(self):
+        import cyberpi
+        cyberpi.console.println = lambda t: self.log.append((world.t, "CyberPi: %s" % t))
+        cyberpi.console.print = cyberpi.console.println
+        if self.mode == "user":
+            return self._run_user()
+        if self.mode == "manual":
+            return self._run_manual()
+        self._run_comp()
+
+    # ------------------------------------------------------------ solo manual (gamepad)
+    def _run_manual(self):
+        import manual
+        hal.time = types.SimpleNamespace(sleep=self.sleep)
+        self.log.append((world.t, "MANUAL: usa el control emulado (o el teclado)"))
+        try:
+            while not self.stop:
+                try:
+                    manual.loop()
+                except physics.Fallen as e:
+                    self._fallen(e)
+                hal.clear_abort()
+        except Stop:
+            pass
+
+    def _fallen(self, e):
+        self.sim.falls += 1
+        self.state = "Se cayó: %s. Usa Colocar en la zona" % e
+        while not self.stop:
+            with self.lock:
+                if "place" in self.pending:
+                    self.pending.remove("place")
+                    break
+            REAL_SLEEP(0.05)
+        self.place(self.screen_level() or self.level)
+        self.state = ""
+
+    # ------------------------------------------------------------ programa subido
+    def _run_user(self):
+        runner = userprog.Runner(world, self._user_step, self.log, on_idle=self._user_idle,
+                                 speed=lambda: self.speed, paused=lambda: self.paused)
+        self.runner = runner
+        self.log.append((world.t, "PROGRAMA SUBIDO: %s" % self.prog_name))
+        old_sleep, old_time = time.sleep, time.time
+        time.sleep, time.time = runner.sleep, runner.now
+        hal.time = time
+        try:
+            runner.run(self.source)
+        finally:
+            time.sleep, time.time = old_sleep, old_time
+
+    def _user_step(self, dt):
+        if self.sim.fallen:                  # caído: el reloj sigue, el robot no
+            world.t += dt
+            return
+        try:
+            self.sim.sleep(dt)
+        except physics.Fallen as e:
+            self.sim.falls += 1
+            self.state = "Se cayó: %s. Usa Colocar en la zona" % e
+
+    def _user_idle(self):
+        if self.stop:
+            self.runner.stop = True
+            return
+        for t, b in list(self.releases):
+            if world.t >= t:
+                world.pressed.discard(b)
+                self.releases.remove((t, b))
+        with self.lock:
+            want = "place" in self.pending
+            if want:
+                self.pending.remove("place")
+        if want:
+            self.place(self.level)
+            self.state = ""
+        if self.runner.error and not self.state:
+            self.state = "Error del programa: " + self.runner.error
+
+    def _run_comp(self):
         hal.time = types.SimpleNamespace(sleep=self.sleep)
         orig_rm = autonomous.run_mission
 
@@ -192,7 +280,6 @@ class Session:
                     main()                       # el programa de competencia (no termina solo)
                 except physics.Fallen as e:
                     self.sim.falls += 1
-                    self.log.append((world.t, "CAIDA: %s" % e))
                     self.state = "Se cayó: %s. Usa Colocar en la zona" % e
                     while not self.stop:         # esperar a que el equipo lo levante
                         with self.lock:
@@ -246,6 +333,8 @@ def new_session(**kw):
     if SESSION is not None:
         SESSION.stop = True
         SESSION.paused = False
+        if getattr(SESSION, "runner", None) is not None:
+            SESSION.runner.stop = True
         SESSION.thread.join(timeout=5)
     SESSION = Session(**kw)
     SESSION.thread.start()
@@ -283,6 +372,31 @@ class Handler(BaseHTTPRequestHandler):
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
         s = SESSION
         cmd = u.path.strip("/")
+        if cmd == "upload":
+            n = int(self.headers.get("Content-Length", 0))
+            data = self.rfile.read(n) if n else b""
+            name = q.get("name", "programa.py")
+            try:
+                src, desc = userprog.source_from_upload(name, data)
+                compile(src, "programa", "exec")
+            except (ValueError, SyntaxError) as e:
+                return self._send(json.dumps({"error": str(e)}, ensure_ascii=False))
+            new_session(level=int(q.get("level", 1)), seed=int(q.get("seed", 0)),
+                        noise=float(q.get("noise", 0)), source=src, prog_name=desc)
+            return self._send(json.dumps({"reload": True}))
+        if cmd == "pad":
+            n = int(self.headers.get("Content-Length", 0))
+            try:
+                st = json.loads(self.rfile.read(n) or b"{}")
+            except ValueError:
+                st = {}
+            if st.get("on", True):
+                world.pad = set(st.get("keys", []))
+                world.axes = {k: float(st.get(k, 0)) for k in ("Lx", "Ly", "Rx", "Ry")}
+            else:
+                world.pad = set()
+                world.axes = {}
+            return self._send(json.dumps({"ok": True}))
         if cmd == "btn" and q.get("k") in ("up", "down", "left", "right", "middle", "a", "b"):
             s.press(q["k"], hold=0.25)
         elif cmd == "place":
@@ -292,8 +406,15 @@ class Handler(BaseHTTPRequestHandler):
         elif cmd == "speed":
             s.speed = float(q.get("v", 1))
         elif cmd == "new":
-            new_session(level=int(q.get("level", 1)), seed=int(q.get("seed", 0)),
-                        noise=float(q.get("noise", 0)))
+            mode = q.get("mode", "comp")
+            if mode == "user" and s.source:
+                new_session(level=int(q.get("level", 1)), seed=int(q.get("seed", 0)),
+                            noise=float(q.get("noise", 0)), source=s.source,
+                            prog_name=s.prog_name)
+            else:
+                new_session(level=int(q.get("level", 1)), seed=int(q.get("seed", 0)),
+                            noise=float(q.get("noise", 0)),
+                            mode="manual" if mode == "manual" else "comp")
             return self._send(json.dumps({"reload": True}))
         else:
             return self.send_error(404)
@@ -307,8 +428,16 @@ def main(argv=None):
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--noise", type=float, default=0.0)
     ap.add_argument("--no-open", action="store_true")
+    ap.add_argument("--manual", action="store_true", help="solo control manual (gamepad emulado)")
+    ap.add_argument("--program", help="correr este .py o .mblock en vez del de competencia")
     a = ap.parse_args(argv)
-    new_session(level=a.level, seed=a.seed, noise=a.noise)
+    if a.program:
+        data = Path(a.program).read_bytes()
+        src, desc = userprog.source_from_upload(Path(a.program).name, data)
+        new_session(level=a.level, seed=a.seed, noise=a.noise, source=src, prog_name=desc)
+    else:
+        new_session(level=a.level, seed=a.seed, noise=a.noise,
+                    mode="manual" if a.manual else "comp")
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), Handler)
     url = "http://127.0.0.1:%d/" % a.port
     print("Simulador en vivo: %s  (Ctrl+C para salir)" % url)

@@ -1,19 +1,38 @@
 # Rover X 2026: control manual con el Bluetooth Controller de Makeblock (misiones de alianza).
 #
+# Misiones manuales (reglamento): cubos M-A-K-E-X en la barra del nivel 2 (en orden y de
+# frente), activar las rampas (el primer acceso es por la ESCALERA) y 4 cilindros (5 x 15 cm)
+# parados en el área negra.
+#
 # Mapeo (ver docs/control_manual.md):
-#   Joystick izq. Y  -> avanzar / retroceder      Joystick der. X -> girar
-#   L1 / L2          -> brazo arriba / abajo      R1 / R2         -> garra abrir / cerrar
-#   N1               -> modo rápido / preciso     N2              -> brazo a altura de barra
-#   N3               -> subir escalera (asistido, mantener)        N4 -> brazo a posición de viaje
-#   Up/Down/Left/Right -> movimientos finos lentos
+#   Joystick izq. ↕ (Ly)  avanzar / retroceder      Joystick der. ↔ (Rx)  girar
+#   Cruceta               movimientos finos lentos (si los joysticks están en el centro)
+#   L1 / L2               brazo arriba / abajo (mantener)
+#   R1 / R2               garra abrir / cerrar (mantener)
+#   N1                    modo rápido / preciso (LEDs azul / naranja)
+#   N2                    brazo a la altura de la barra (cubos MakeX)
+#   N3 (mantener)         escalera: recto con el giroscopio, potencia de escalera
+#   N4                    brazo arriba (garra sobre la nariz): viajar, girar cerca de cosas
+#   Joystick der. ↕ (Ry)  brazo fino (además de L1/L2)
+#
+# Ayudas:
+#   - Al avanzar sin girar, el giroscopio SOSTIENE EL RUMBO (rampas, recortes, la oruga
+#     izquierda que avanza 2.3 % menos). Al soltar el giro se toma el rumbo nuevo.
+#   - hal.drive limita la aceleración mientras va inclinado (no se vuelca en rampas/escalera).
+#   - El brazo se mueve por ÁNGULO DEL SERVO (0..90°, tabla medida en config.py): a 0° la garra
+#     queda baja y al frente (~8.5 cm), a 90° arriba sobre la nariz.
 
 import hal
 import config as cfg
 import geometry as geo
 
 claw = cfg.P["claw_open"]
-arm = cfg.P["h_carry"]   # altura de la garra en cm (se convierte a ángulo con geometry)
+arm_deg = geo.arm_servo(cfg.P["h_top"])     # ángulo del servo del brazo
 fast = True
+hold = None                                 # rumbo a sostener al avanzar recto (o None)
+ARM_RATE = 60.0                             # grados de servo por segundo con L1/L2
+CLAW_RATE = 150.0                           # grados de servo por segundo con R1/R2
+DT = 0.02
 
 
 def shape(v):
@@ -41,8 +60,26 @@ def _edge(state, key):
     return now and not was
 
 
+def _heading_hold(f, t):
+    """Corrección de giro para ir recto con el giroscopio mientras no se pide girar."""
+    global hold
+    if t != 0 or f == 0:
+        hold = None
+        return t
+    if hold is None:
+        hold = hal.heading()
+        return 0
+    err = hold - hal.heading()
+    return hal.clamp(cfg.P["head_kp"] * err, -25, 25)
+
+
+def _arm(deg):
+    global arm_deg
+    arm_deg = hal.clamp(deg, 0, 90)
+
+
 def step(state):
-    global claw, arm, fast
+    global claw, fast, hold
     if _edge(state, "N1"):
         fast = not fast
         if fast:
@@ -51,11 +88,35 @@ def step(state):
             hal.leds(120, 60, 0)
     limit = cfg.PAD_FAST if fast else cfg.PAD_SLOW
 
+    # ---- brazo y garra (también mientras sube la escalera)
+    if hal.pad_key("L1"):
+        _arm(arm_deg + ARM_RATE * DT)
+    elif hal.pad_key("L2"):
+        _arm(arm_deg - ARM_RATE * DT)
+    ry = shape(hal.pad_axis("Ry"))
+    if ry:
+        _arm(arm_deg + ry / 100.0 * ARM_RATE * DT)
+    if _edge(state, "N2"):
+        _arm(geo.arm_servo(cfg.P["h_bar"]))
+    if _edge(state, "N4"):
+        _arm(geo.arm_servo(cfg.P["h_top"]))
+    if hal.pad_key("R1"):
+        claw = hal.clamp(claw + CLAW_RATE * DT, 0, 180)
+    elif hal.pad_key("R2"):
+        claw = hal.clamp(claw - CLAW_RATE * DT, 0, 180)
+    hal.servo(cfg.SERVO_ARM, arm_deg)
+    hal.servo(cfg.SERVO_CLAW, claw)
+
+    # ---- escalera: recto con el giroscopio mientras se mantiene N3
     if hal.pad_key("N3"):
-        # escalera: potencia máxima recta mientras se mantiene N3
-        hal.drive(cfg.P["v_stairs"], cfg.P["v_stairs"])
+        if hold is None:
+            hold = hal.heading()
+        corr = hal.clamp(cfg.P["head_kp"] * (hold - hal.heading()), -25, 25)
+        v = cfg.P["v_stairs"]
+        hal.drive(v + corr, v - corr)
         return
 
+    # ---- manejo
     f = cfg.PAD_Y_SIGN * shape(hal.pad_axis("Ly"))
     t = cfg.PAD_TURN_GAIN * shape(hal.pad_axis("Rx"))
     if f == 0 and t == 0:
@@ -69,37 +130,33 @@ def step(state):
         elif hal.pad_key("Right"):
             t = slow
         limit = cfg.PAD_SLOW
+    t = _heading_hold(f, t)
     left, right = mix(f, t, limit)
     hal.drive(left, right)
 
-    if hal.pad_key("L1"):
-        arm = hal.clamp(arm + 0.3, 0, 40)
-    elif hal.pad_key("L2"):
-        arm = hal.clamp(arm - 0.3, 0, 40)
-    if _edge(state, "N2"):
-        arm = cfg.P["h_bar"]
-    if _edge(state, "N4"):
-        arm = cfg.P["h_carry"]
-    if hal.pad_key("R1"):
-        claw = hal.clamp(claw + 3, 0, 180)
-    elif hal.pad_key("R2"):
-        claw = hal.clamp(claw - 3, 0, 180)
-    hal.servo(cfg.SERVO_ARM, geo.arm_servo(arm))
-    hal.servo(cfg.SERVO_CLAW, claw)
+
+def status():
+    h, _ = geo.arm_at(arm_deg)
+    return "%s brazo %d (%.0f cm)" % ("RAPIDO" if fast else "PRECISO", arm_deg, h)
 
 
 def loop(duration_s=None):
-    """Bucle de control manual. Sale al pasar duration_s o con B en el CyberPi."""
+    """Bucle de control manual. Sale al pasar duration_s o con A (abortar) en el CyberPi."""
+    global hold
+    hold = None
     hal.clear_abort()
     hal.show("MANUAL", line=0, size=24)
     if not hal.pad_ok():
         hal.show("Sin modulo gamepad", line=2)
     state = {}
     t0 = hal.now()
+    shown = 0
     while duration_s is None or hal.now() - t0 < duration_s:
         if hal.abort_requested():
             break
         step(state)
-        hal.wait(0.02)
+        shown += 1
+        if shown % 10 == 0:
+            hal.show(status(), line=1)
+        hal.wait(DT)
     hal.stop()
-

@@ -116,3 +116,21 @@ una rampa de 40° la asistencia evita que se quede parado, pero el avance para q
 - Física simplificada: el robot es un rectángulo, la escalera es una pendiente (más la regla
   de que cada oruga vaya sobre su tramo), el prisma solo se desliza en la dirección del empuje.
 - El simulador informa decisiones; no prueba que el robot real lo logre.
+
+## Simulador en vivo: programa propio y parte manual
+
+```bash
+.venv/bin/python simulation/live.py                         # programa de competencia
+.venv/bin/python simulation/live.py --manual --level 2      # solo control manual
+.venv/bin/python simulation/live.py --program software/robot/calibrations.mblock --level 1
+```
+
+- **Subir y correr** (en la página): un `.py` o un `.mblock` en modo **Python** (como el del
+  compañero o `calibrations.mblock`). Corre con el robot medido; los `@event.start` y
+  `@event.is_press(...)` de mBlock corren en paralelo como en el CyberPi (cada uno en su hilo,
+  con el reloj simulado). Lo que imprime `cyberpi.console.println` sale en Eventos; los errores
+  dicen la línea. Los botones A/B/joystick del CyberPi de la página disparan sus manejadores.
+  Un `.mblock` solo de bloques todavía no se puede correr (avisa).
+- **programa**: competencia / solo manual / programa subido, para "Nueva corrida".
+- **Control Bluetooth de Makeblock (emulado)**: la misma distribución que el control real (y que
+  el emulador del repo Challengue). Ver [docs/control_manual.md](../docs/control_manual.md).

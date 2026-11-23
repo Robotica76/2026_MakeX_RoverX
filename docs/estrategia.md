@@ -84,3 +84,30 @@ Calibrar en pista: `skid` (girar 360° en el lugar: grados de encoder contra gir
 - Altura y posición del Quad RGB y de la sonda que lee las tarjetas (`CARD_PROBE`, `card_probe_fwd`).
 - El robot **no lleva ultrasónico**: medir en la pista las distancias de referencia de
   [geometria.md](geometria.md#sin-ultrasónico-medidas-de-la-pista).
+
+## Revisión del autónomo (23 nov, con el robot medido)
+
+Corregido (simulador, ruido 1, 20 corridas desde el nivel 1: mediana 1000):
+- **Tarjetas**: el rodeo de la torre volvía a la línea con la sonda pasada de las dos primeras
+  tarjetas. Ahora vuelve lo más cerca posible y retrocede leyendo (`CARDS_BACK_CM`): 5 de 6.
+  La sonda de tarjetas es una central (R1): la de afuera (R2, a 3.0 cm medidos) leía fuera de la
+  tarjeta (7 cm de ancho). Una tarjeta repetida contaba 6 y paraba sobre la azul, que se tomaba
+  por la meta.
+- **Reinicio en el nivel 2**: el giro en la T chocaba con el muro del pasillo (11 de 12 con
+  ruido): retrocede `L2_T_BACK_CM` antes de girar.
+- **Pasillo**: punto de escuadra a 17 cm del muro de abajo (la nariz barre 16 cm al girar);
+  salida por el centro de la abertura con corrección máxima de 15°. 60 % → 70 %.
+- **Reinicio en el nivel 4**: la zona verde (12.7 cm) es más chica que el robot (20.3). Colocar
+  mirando al oeste con la cola sobre el último escalón (nariz a ~4 cm de la torre).
+- **Posición de viaje** del brazo (encender y colocar): servo a 90° (garra sobre la nariz).
+
+Pendiente (medir en pista o decidir):
+1. **Pasillo (70 %)**: los dos recortes junto al muro de arriba ocupan 15.3 cm, casi el hueco
+   entre orugas (15.35); con su posición real se puede elegir otro punto de escuadra.
+2. **Tarjeta cian**: en el plano está a 6 cm de la torre; el robot no la puede leer sin tocarla.
+   Depende de dónde estén de verdad las tarjetas (pregunta abierta 2 del reglamento).
+3. **Cubo con la garra inclinada**: a altura de carga (17.5 cm, servo ~61°) la garra va ~40°
+   hacia arriba; verificar que el cubo no se resbala. La misión 2 pide "≥ 5 cm de la base".
+4. **Volcadura en la escalera**: margen mínimo 1.7 cm (brazo bajo al frente al subir).
+5. **Giroscopio** (`gyro_scale`) y tabla del brazo: calibrar (`calibrations`).
+6. Pelota (misiones 8 y 12, 250 pts) omitida por decisión del equipo.
