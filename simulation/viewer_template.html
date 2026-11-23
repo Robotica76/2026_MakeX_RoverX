@@ -176,6 +176,52 @@ function rpoly(x, y, yaw, len, wid, fwd, lat) {
   return [[len / 2, wid / 2], [-len / 2, wid / 2], [-len / 2, -wid / 2], [len / 2, -wid / 2]]
     .map(([a, b]) => [ox + c * a - s * b, oy + s * a + c * b]);
 }
+
+// ---------------------------------------------------------------- modelo del robot (medidas reales)
+// Marco local: x adelante desde el centro de giro, y arriba desde el piso. Oruga de 3 ruedas:
+// blanca atrás, 1a negra adelante (tramo apoyado = track_c) y 2a negra levantada (nariz).
+const CLAW_PITCH = [[0, 0], [45, 15], [90, 90]];   // inclinación de la garra (estimada de las fotos)
+function interp(tab, a) {
+  if (a <= tab[0][0]) return tab[0][1];
+  for (let k = 1; k < tab.length; k++)
+    if (a <= tab[k][0]) { const [a0, v0] = tab[k - 1], [a1, v1] = tab[k]; return v0 + (a - a0) / (a1 - a0) * (v1 - v0); }
+  return tab[tab.length - 1][1];
+}
+function wheelsOf(R) {
+  const r = (R.wheel_d || 3.95) / 2, t = R.belt_t || 0.4, ch = R.contact_half || R.track_len / 3;
+  const nx = R.nose_fwd || ch + 3.4, nh = R.nose_h || 3.4;
+  return { r, t, list: [[-ch, r + t, 0xf2f2f2], [ch, r + t, 0x1b1b1b], [nx, r + t + nh, 0x1b1b1b]] };
+}
+function hull(pts) {
+  pts = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [], up = [];
+  for (const q of pts) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+  for (const q of pts.slice().reverse()) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+function trackOutline(R, extra) {
+  const W = wheelsOf(R); let pts = [];
+  for (const [x, y] of W.list) for (let k = 0; k < 24; k++) {
+    const a = k / 24 * 2 * Math.PI; pts.push([x + (W.r + extra) * Math.cos(a), y + (W.r + extra) * Math.sin(a)]);
+  }
+  return hull(pts);
+}
+function armPose(R, servo) {
+  // tabla del servo: altura del centro de la garra y cm delante de la nariz; inclinación de la garra
+  const a = Math.max(0, Math.min(90, servo == null ? 45 : servo));
+  const h = interp([[0, R.arm_h0], [45, R.arm_h45], [90, R.arm_h90]], a);
+  const xn = interp([[0, R.arm_x0], [45, R.arm_x45], [90, R.arm_x90]], a);
+  const pitch = interp(CLAW_PITCH, a) * Math.PI / 180;
+  const C = [(R.track_front || R.track_len / 2) + xn, h];
+  const u = [Math.cos(pitch), Math.sin(pitch)], n = [-u[1], u[0]];
+  const Wr = [C[0] - 2.8 * u[0], C[1] - 2.8 * u[1]];                     // servo de la garra (muñeca)
+  const px = R.arm_pivot_fwd - R.ref_rot_fwd, G = R.arm_pivot_h;
+  return { C, u, n, Wr, pitch,
+           Pu: [px, G], Pl: [px + 0.6, G - 4.5],                              // ejes fijos del brazo
+           Cu: [Wr[0] + 1.6 * n[0] - 1.2 * u[0], Wr[1] + 1.6 * n[1] - 1.2 * u[1]],
+           Cl: [Wr[0] - 2.6 * n[0] - 1.2 * u[0], Wr[1] - 2.6 * n[1] - 1.2 * u[1]] };
+}
 function text(t, x, y, size, color, align) {
   const [a, b] = T(x, y);
   cx.fillStyle = color || "#333"; cx.font = `${size || 11}px sans-serif`;
@@ -340,17 +386,42 @@ function drawSide() {
   }
   sx.closePath(); sx.fillStyle = "#b9c0c9"; sx.fill();
   sx.strokeStyle = "#555"; sx.lineWidth = 2; sx.stroke();
-  // robot inclinado: orugas (track_len x 5 cm) + cuerpo + brazo + garra
-  const p = f[5] * Math.PI / 180, L = R.track_len;
+  // robot inclinado con su forma real: oruga de 3 ruedas, caja del mBot2, mástil, brazo y garra
+  const p = f[5] * Math.PI / 180;
   sx.save(); sx.translate(X(d0), Y(f[4])); sx.rotate(-p);
-  sx.fillStyle = "#2a2f36"; sx.fillRect(-L / 2 * k, -5 * k, L * k, 5 * k);            // oruga
-  sx.fillStyle = "rgba(79,195,247,.9)"; sx.fillRect(-L / 2 * k * 0.8, -11 * k, L * k * 0.6, 6 * k);  // caja mBot2
-  const reach = Math.hypot(f[13][0] - f[1], f[13][1] - f[2]);
-  const cxp = reach * k, cyp = -f[6] * k;
-  sx.strokeStyle = "#2266cc"; sx.lineWidth = 3; sx.beginPath();
-  sx.moveTo(0, -10 * k); sx.lineTo(cxp, cyp); sx.stroke();                           // brazo
-  sx.fillStyle = f[7] ? "#ff8c00" : "rgba(255,140,0,.5)";
-  sx.beginPath(); sx.arc(cxp, cyp, 1.6 * k, 0, 7); sx.fill();                          // garra
+  const Q = (x, y) => [x * k, -y * k];
+  const pathOf = (pts) => { sx.beginPath(); pts.forEach(([x, y], j) => { const [a, b] = Q(x, y); j ? sx.lineTo(a, b) : sx.moveTo(a, b); }); sx.closePath(); };
+  const WS = wheelsOf(R);
+  pathOf(trackOutline(R, WS.t)); sx.fillStyle = "#2a2f36"; sx.fill();
+  pathOf(trackOutline(R, 0)); sx.fillStyle = "#cfd6dd"; sx.fill();
+  for (const [x, y, col] of WS.list) {
+    const [a, b] = Q(x, y);
+    sx.fillStyle = col === 0xf2f2f2 ? "#f2f2f2" : "#1b1b1b"; sx.beginPath(); sx.arc(a, b, WS.r * k, 0, 7); sx.fill();
+    sx.fillStyle = "#c9a227"; sx.beginPath(); sx.arc(a, b, 0.5 * k, 0, 7); sx.fill();
+  }
+  const ch = R.contact_half || 6;
+  sx.fillStyle = "#3b8fd9"; { const [a, b] = Q(-ch, WS.r + WS.t + 2.4); sx.fillRect(a, b, 2 * ch * k, 1.2 * k); }   // chasis
+  sx.fillStyle = "rgba(70,80,90,.85)"; { const [a, b] = Q(-6.5, WS.r + WS.t + 7.4); sx.fillRect(a, b, 12.3 * k, 4.2 * k); }  // caja mBot2
+  sx.fillStyle = "#111"; { const [a, b] = Q(-6.5, WS.r + WS.t + 8.2); sx.fillRect(a, b, 4 * k, 0.8 * k); }             // CyberPi
+  const sfw = R.sensor_fwd - R.ref_rot_fwd;
+  sx.fillStyle = "#ff3d00"; { const [a, b] = Q(sfw - 1.1, 1.5); sx.fillRect(a, b, 2.2 * k, 0.6 * k); }            // Quad RGB
+  const AP = armPose(R, f[14]);
+  const line = (P1, P2, col, w) => { const [a, b] = Q(...P1), [c, d] = Q(...P2); sx.strokeStyle = col; sx.lineWidth = w; sx.beginPath(); sx.moveTo(a, b); sx.lineTo(c, d); sx.stroke(); };
+  line([AP.Pu[0], WS.r + WS.t + 2.4], AP.Pu, "#2266cc", Math.max(2, 0.9 * k));                      // mástil
+  line([AP.Pu[0] - 3, WS.r + WS.t + 2.4], AP.Pu, "#2266cc", Math.max(2, 0.9 * k));
+  line(AP.Pu, AP.Cu, "#2f7fe0", Math.max(2, 0.8 * k)); line(AP.Pl, AP.Cl, "#2f7fe0", Math.max(2, 0.8 * k));  // brazo
+  line(AP.Cu, AP.Cl, "#2f7fe0", Math.max(2, 0.8 * k));
+  const gap = (f[7] ? 5 : (R.claw_open_w || 9)) / 2;
+  const jaw = (side, col) => {
+    // dedo en V: del servo de la garra a la punta (abierto = separados claw_open_w)
+    const a0 = [AP.Wr[0] + side * 1.0 * AP.n[0], AP.Wr[1] + side * 1.0 * AP.n[1]];
+    const t0 = [AP.C[0] + (R.claw_tip + 1) * AP.u[0] + side * gap * AP.n[0], AP.C[1] + (R.claw_tip + 1) * AP.u[1] + side * gap * AP.n[1]];
+    line(a0, t0, col, Math.max(2, 0.6 * k));
+  };
+  jaw(-1, "#2f8fd6"); jaw(1, "#222");
+  { const [a, b] = Q(...AP.Wr); sx.fillStyle = "#222"; sx.fillRect(a - 1.2 * k, b - 1.2 * k, 2.4 * k, 2.4 * k); }  // servo garra
+  sx.fillStyle = f[7] ? "#ff8c00" : "rgba(255,140,0,.6)";
+  { const [a, b] = Q(...AP.C); sx.beginPath(); sx.arc(a, b, 0.9 * k, 0, 7); sx.fill(); }                    // centro de la garra
   sx.fillStyle = "#0b4f6c"; sx.beginPath(); sx.arc(0, 0, 3, 0, 7); sx.fill();          // centro de giro
   sx.restore();
   sx.fillStyle = "#1d2330"; sx.textAlign = "right"; sx.font = "13px sans-serif";
@@ -611,25 +682,86 @@ if (D.live) {
   const prism = new THREE.Mesh(new THREE.BoxGeometry(6.4, PH, 6.4), new THREE.MeshLambertMaterial({ color: 0xe8c400 }));
   scene.add(prism);
 
-  // robot: orugas, caja del mBot2, brazo y garra (marco local: +x adelante, +y arriba, -z izquierda)
+  // robot con su forma real (marco local: +x adelante, +y arriba, -z izquierda; origen = centro de
+  // giro sobre el piso). Medidas de config.py (A, B, C, D, ruedas, sondas, brazo).
   const robot = new THREE.Group(); scene.add(robot);
-  const L = R.track_len, off = (R.robot_w - R.belt_w) / 2;
+  const lam = (c, o) => new THREE.MeshLambertMaterial(Object.assign({ color: c }, o || {}));
+  const rbox = (sx_, sy, sz, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(sx_, sy, sz), mat); m.position.set(x, y, z); robot.add(m); return m; };
+  const W3 = wheelsOf(R), off = (R.robot_w - R.belt_w) / 2, IN = R.robot_w - 2 * R.belt_w;
+  const shapeOf = (pts) => { const sh = new THREE.Shape(); pts.forEach(([x, y], j) => j ? sh.lineTo(x, y) : sh.moveTo(x, y)); sh.closePath(); return sh; };
   for (const sd of [-1, 1]) {
-    const t = new THREE.Mesh(new THREE.BoxGeometry(L, 5, R.belt_w), new THREE.MeshLambertMaterial({ color: 0x2a2f36 }));
-    t.position.set(R.track_off || 0, 2.5, sd * off); robot.add(t);
+    // banda: contorno exterior (ruedas + grosor) con hueco interior
+    const sh = shapeOf(trackOutline(R, W3.t));
+    const hole = new THREE.Path(); trackOutline(R, -0.2).forEach(([x, y], j) => j ? hole.lineTo(x, y) : hole.moveTo(x, y));
+    sh.holes.push(hole);
+    const g = new THREE.ExtrudeGeometry(sh, { depth: R.belt_w, bevelEnabled: false, curveSegments: 8 });
+    g.translate(0, 0, -R.belt_w / 2);
+    const belt = new THREE.Mesh(g, lam(0x22262c)); belt.position.z = sd * off; robot.add(belt);
+    for (const [x, y, col] of W3.list) {
+      const wg = new THREE.CylinderGeometry(W3.r, W3.r, R.belt_w * 0.8, 22); wg.rotateX(Math.PI / 2);
+      const w = new THREE.Mesh(wg, lam(col)); w.position.set(x, y, sd * off); robot.add(w);
+      const hg = new THREE.CylinderGeometry(0.45, 0.45, R.belt_w + 0.4, 10); hg.rotateX(Math.PI / 2);
+      const hb = new THREE.Mesh(hg, lam(0xc9a227)); hb.position.set(x, y, sd * off); robot.add(hb);
+    }
+    // placa blanca entre las ruedas y viga del chasis
+    rbox(2 * W3.list[1][0] + 1, 2.4, 0.4, lam(0xf4f4f4), 0, W3.r + W3.t + 0.6, sd * (IN / 2 - 0.3));
+    rbox(2 * W3.list[1][0] + 2, 1.2, 1.2, lam(0x3b8fd9), 0, W3.r + W3.t + 2.4, sd * (IN / 2 - 1.4));
+    // motor (atrás, junto a la rueda blanca) y su cilindro
+    rbox(3.6, 3.2, 3.4, lam(0x8ed3f5), W3.list[0][0] + 0.4, W3.r + W3.t + 0.6, sd * (IN / 2 - 2.6));
+    const mg = new THREE.CylinderGeometry(1.1, 1.1, 4.2, 14); mg.rotateZ(Math.PI / 2);
+    const mc = new THREE.Mesh(mg, lam(0xb8b8b8)); mc.position.set(W3.list[0][0] + 4.2, W3.r + W3.t + 0.6, sd * (IN / 2 - 3.6)); robot.add(mc);
   }
-  const bodyM = new THREE.Mesh(new THREE.BoxGeometry(L * 0.62, 6, R.robot_w - 2 * R.belt_w),
-                               new THREE.MeshLambertMaterial({ color: 0x4fc3f7 }));
-  bodyM.position.set(-L * 0.12, 6.5, 0); robot.add(bodyM);
-  const pivot = new THREE.Vector3(R.arm_pivot_fwd - R.ref_rot_fwd, R.arm_pivot_h, 0);
-  const armMat = new THREE.MeshLambertMaterial({ color: 0x2266cc });
-  const arm = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), armMat); robot.add(arm);
-  const claw = new THREE.Mesh(new THREE.BoxGeometry(R.claw_tip + 2, 2.5, 6),
-                              new THREE.MeshLambertMaterial({ color: 0xff8c00 }));
-  robot.add(claw);
-  const probes = new THREE.Mesh(new THREE.BoxGeometry(1, 0.6, R.probe_pitch + 2 * (R.probe_outer || R.probe_pitch) + 1),
-                                new THREE.MeshLambertMaterial({ color: 0xff3d00 }));
-  probes.position.set(R.sensor_fwd - R.ref_rot_fwd, 0.6, 0); robot.add(probes);
+  const yb = W3.r + W3.t + 2.4;
+  rbox(1.2, 1.2, IN, lam(0x3b8fd9), W3.list[1][0] - 0.2, yb, 0);          // vigas transversales
+  rbox(1.2, 1.2, IN, lam(0x3b8fd9), W3.list[0][0] + 2.6, yb, 0);
+  // caja del mBot2 (translúcida) y CyberPi atrás con su pantalla y joystick
+  rbox(12.3, 4.2, 9.6, new THREE.MeshPhongMaterial({ color: 0x55606a, transparent: true, opacity: 0.8, shininess: 60 }), -0.35, yb + 2.7, 0);
+  rbox(4.0, 1.0, 9.2, lam(0x1a1d22), -4.6, yb + 5.2, 0);
+  rbox(1.6, 0.1, 2.2, lam(0x2d6cdf, { emissive: 0x0d2a66 }), -4.4, yb + 5.75, 0.2);
+  const js = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.6, 12), lam(0x9a9a9a)); js.position.set(-4.4, yb + 5.9, -2.8); robot.add(js);
+  // Quad RGB bajo el chasis con sus 4 sondas (separación real 2.4 / 1.25 / 2.4)
+  const sfw = R.sensor_fwd - R.ref_rot_fwd;
+  rbox(2.2, 0.35, R.probe_pitch + 2 * (R.probe_outer || R.probe_pitch) + 2.4, lam(0x16181c), sfw, 1.4, 0);
+  { const pi = R.probe_pitch / 2, po = pi + (R.probe_outer || R.probe_pitch);
+    for (const lat of [-po, -pi, pi, po]) {
+      const pr = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 8), lam(0xff3d00, { emissive: 0x551100 }));
+      pr.position.set(sfw, 1.15, lat); robot.add(pr);
+    } }
+  // brazo: mástil (corrido arm_lat a la izquierda), eslabones y garra
+  const zA = -(R.arm_lat || 0), aw = R.arm_w || 4.9;
+  const armMat = lam(0x2f7fe0), mastMat = lam(0x2266cc);
+  const bar = (mat, th) => { const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat); m.userData.th = th; robot.add(m); return m; };
+  const setBar = (m, a, b, z, depth) => {
+    const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 0.01;
+    m.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, z); m.scale.set(len, m.userData.th, depth || m.userData.th);
+    m.rotation.set(0, 0, Math.atan2(dy, dx));
+  };
+  const A0 = armPose(R, 45);
+  for (const sd of [-1, 1]) {
+    setBar(bar(mastMat, 0.9), [A0.Pu[0], yb], A0.Pu, zA + sd * aw / 2, 0.9);
+    setBar(bar(mastMat, 0.9), [A0.Pu[0] - 3, yb], A0.Pu, zA + sd * aw / 2, 0.9);
+  }
+  { const ag = new THREE.CylinderGeometry(0.3, 0.3, aw + 2.5, 8); ag.rotateX(Math.PI / 2);
+    const ax_ = new THREE.Mesh(ag, lam(0xcccccc)); ax_.position.set(A0.Pu[0], A0.Pu[1], zA); robot.add(ax_); }
+  const linkU = bar(armMat, 0.8), linkL = bar(armMat, 0.8), coupler = bar(armMat, 0.8);
+  const jawLo = bar(lam(0x2f8fd6), 0.35), jawHi = bar(lam(0x222222), 0.35);
+  const wrist = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.4, 2.4), lam(0x222222)); robot.add(wrist);
+  const clawDot = new THREE.Mesh(new THREE.SphereGeometry(0.6, 10, 8), lam(0xff8c00)); robot.add(clawDot);
+  function poseArm(servo, closed) {
+    const A = armPose(R, servo);
+    setBar(linkU, A.Pu, A.Cu, zA, 0.8); setBar(linkL, A.Pl, A.Cl, zA, 0.8); setBar(coupler, A.Cu, A.Cl, zA, 0.8);
+    const gap = (closed ? 5 : (R.claw_open_w || 9)) / 2;
+    for (const [m, sd] of [[jawLo, -1], [jawHi, 1]]) {
+      const a0 = [A.Wr[0] + sd * 1.0 * A.n[0], A.Wr[1] + sd * 1.0 * A.n[1]];
+      const t0 = [A.C[0] + (R.claw_tip + 1) * A.u[0] + sd * gap * A.n[0], A.C[1] + (R.claw_tip + 1) * A.u[1] + sd * gap * A.n[1]];
+      setBar(m, a0, t0, zA, 4.5);
+    }
+    wrist.position.set(A.Wr[0], A.Wr[1], zA); wrist.rotation.set(0, 0, A.pitch);
+    clawDot.position.set(A.C[0], A.C[1], zA);
+    clawDot.material.color.set(closed ? 0xff8c00 : 0xffc480);
+  }
+  poseArm(45, false);
+  window.v3 = { camera, controls, robot, P };      // para inspeccionar desde la consola
 
   camera.position.copy(P(A.w * 0.5, -45, 250)); controls.target.copy(P(A.w * 0.5, A.h * 0.5, 10));
   let lastRobot = null;
@@ -653,14 +785,7 @@ if (D.live) {
     robot.rotation.set(0, 0, 0);
     robot.rotateY(f[3] * Math.PI / 180);
     robot.rotateZ(f[5] * Math.PI / 180);
-    // garra: alcance horizontal y altura sobre el robot
-    const reach = Math.hypot(f[13][0] - f[1], f[13][1] - f[2]) / Math.max(0.5, Math.cos(f[5] * Math.PI / 180));
-    const cl = new THREE.Vector3(reach, f[6], 0);
-    claw.position.copy(cl);
-    claw.material.color.set(f[7] ? 0xff8c00 : 0xffc480);
-    const mid = pivot.clone().add(cl).multiplyScalar(0.5), len = pivot.distanceTo(cl);
-    arm.position.copy(mid); arm.scale.set(len, 1.2, 1.2);
-    arm.rotation.set(0, 0, Math.atan2(cl.y - pivot.y, cl.x - pivot.x));
+    poseArm(f[14], f[7]);
     cube.position.copy(P(f[9][0], f[9][1], f[9][2]));
     ball.position.copy(P(f[10][0], f[10][1], f[10][2]));
     prism.position.copy(P(f[11][0], f[11][1], Z["3"] + PH / 2 - (f[11][2] ? 12 : 0)));

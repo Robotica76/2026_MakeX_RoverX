@@ -83,6 +83,7 @@ def frame_of(sim, label):
         [round(sim.prism["x"], 1), round(sim.prism["y"], 1), 1 if sim.prism["lost"] else 0],
         label,
         [round(v, 1) for v in sim.claw_point()[:2]],
+        round(world.servos.get(cfg.SERVO_ARM, 45), 1),      # 14: ángulo del servo del brazo
     ]
 
 
@@ -218,9 +219,7 @@ def run_once(level=1, seed=0, noise=0.0, line_w=2.0, prog=None, true=None, budge
     return {
         "report": rep, "frames": frames, "events": [(round(t, 2), e) for t, e in log],
         "arena": arena.to_json() if record else None,
-        "robot": {k: dict(cfg.P, **physics.track_dims(cfg.P))[k] for k in ("track_len", "track_off", "nose_h", "robot_w", "belt_w", "sensor_fwd",
-                                        "ref_rot_fwd", "probe_pitch", "probe_outer", "claw_tip",
-                                        "arm_pivot_fwd", "arm_pivot_h")},
+        "robot": physics.robot_view(cfg.P),
         "params": {"level": level, "seed": seed, "noise": noise, "line_w": line_w,
                    "ramp_deg": ramp_deg,
                    "prog": prog or {}, "true": true or {}, "cards": arena.card_colors},

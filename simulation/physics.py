@@ -42,6 +42,20 @@ def track_dims(b):
             "nose_h": b["track_d"] * math.sin(math.radians(b["nose_deg"]))}
 
 
+VIEW_KEYS = ("track_len", "track_off", "nose_h", "nose_fwd", "contact_half", "track_front",
+             "robot_w", "belt_w", "belt_t", "wheel_d", "track_c", "track_d", "nose_deg",
+             "sensor_fwd", "ref_rot_fwd", "probe_pitch", "probe_outer", "claw_tip",
+             "arm_pivot_fwd", "arm_pivot_h", "arm_lat", "arm_w", "claw_open_w",
+             "arm_h0", "arm_x0", "arm_h45", "arm_x45", "arm_h90", "arm_x90")
+
+
+def robot_view(P):
+    """Medidas del robot que el visor necesita para dibujarlo."""
+    d = dict(P)
+    d.update(track_dims(d))
+    return {k: d[k] for k in VIEW_KEYS if k in d}
+
+
 class Sim:
     def __init__(self, world, cfg, geo, arena, level=1, noise=0.0, seed=0, true_overrides=None,
                  log=None):

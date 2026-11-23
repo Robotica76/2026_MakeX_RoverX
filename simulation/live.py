@@ -230,9 +230,7 @@ class Session:
             "live": True, "report": {"missions": [], "program": {}, "program_points": 0, "total": 0,
                                      "notes": [], "warnings": ra.geometry_warnings(), "error": None},
             "frames": [], "events": [], "arena": self.arena.to_json(),
-            "robot": {k: dict(cfg.P, **physics.track_dims(cfg.P))[k] for k in ("track_len", "track_off", "nose_h", "robot_w", "belt_w", "sensor_fwd",
-                                            "ref_rot_fwd", "probe_pitch", "probe_outer", "claw_tip",
-                                            "arm_pivot_fwd", "arm_pivot_h")},
+            "robot": physics.robot_view(cfg.P),
             "params": dict(self.params, prog={}, true={}, cards=self.arena.card_colors,
                            ramp_deg=None),
             "missions": [{"id": m["id"], "name": m["name"], "pts": m["pts"], "level": m["level"]}
