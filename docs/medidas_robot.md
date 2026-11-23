@@ -22,6 +22,10 @@ menú del CyberPi.
 | Diámetro de las ruedas (blancas y negras iguales) | `wheel_d`, `sprocket_d` | **3.95** |
 | Grosor de la banda (estimado de la foto, falta medir) | `belt_t` | ~0.4 |
 
+| Vista superior E: borde interior de la oruga izquierda → brazo | (`arm_lat`) | **5.97** |
+| Vista superior F: ancho del brazo | `arm_w` | **4.9** |
+| Brazo corrido a la izquierda (calculado: E + F/2 − A/2) | `arm_lat` | **0.745** |
+
 Con esto: largo de la oruga visto desde arriba ≈ 20.3 cm (8.4 detrás del centro de giro y
 11.85 delante, hasta la nariz); nariz 3.4 cm más alta que el tramo apoyado. El centro de giro
 es el punto medio del tramo apoyado (entre los ejes de C).

@@ -60,6 +60,10 @@ P = {
     # --- brazo de paralelogramo (MEDIR). Altura = altura del pivote + largo * sen(ángulo)
     "arm_pivot_fwd": 10.0,   # TODO(medir) referencia -> eje del servo del brazo (horizontal)
     "arm_pivot_h": 10.0,     # TODO(medir) altura del eje del servo del brazo sobre el piso
+    "arm_w": 4.9,            # MEDIDO (F, vista superior): ancho del brazo (entre sus dos barras)
+    # MEDIDO (E = 5.97, del borde interior de la oruga izquierda al brazo): el brazo no va al
+    # centro, va corrido a la IZQUIERDA: 5.97 + 4.9/2 - 15.35/2 = 0.745 cm
+    "arm_lat": 0.745,        # desplazamiento lateral del brazo y la garra (+ = izquierda)
     "arm_len": 9.0,          # TODO(medir) largo de las barras del paralelogramo, eje a eje
     "arm_grip_dx": 3.0,      # TODO(medir) del eje del extremo del brazo al centro de la garra (horizontal)
     "arm_grip_dz": -1.0,     # TODO(medir) del eje del extremo del brazo al centro de la garra (vertical, - = abajo)

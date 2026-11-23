@@ -402,7 +402,7 @@ class Sim:
 
     def claw_point(self):
         """(x, y, z) del centro de la garra en la pista."""
-        x, y = self.to_world(self.claw_reach(), 0.0)
+        x, y = self.to_world(self.claw_reach(), self.body.get("arm_lat", 0.0))
         h, _ = self.arm_h()
         return x, y, self.z + h
 
@@ -414,7 +414,8 @@ class Sim:
         r = self.claw_reach()
         c, s = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
         mid = r + (b["claw_tip"] - 2.0) / 2.0
-        return ar.rect_poly(x + c * mid, y + s * mid, math.radians(yaw), b["claw_tip"] + 2.0, 6.0)
+        lat = b.get("arm_lat", 0.0)
+        return ar.rect_poly(x + c * mid - s * lat, y + s * mid + c * lat, math.radians(yaw), b["claw_tip"] + 2.0, 6.0)
 
     def claw_closed(self):
         b = self.body
@@ -479,11 +480,12 @@ class Sim:
                 pr["cradled"] = False
                 self.log.append((self.world.t, "suelta el prisma"))
                 return False
-            pr["x"], pr["y"] = self.to_world(palm, 0.0)
+            pr["x"], pr["y"] = self.to_world(palm, b.get("arm_lat", 0.0))
             return True
         if not low:
             return False
         f, l = self._local(pr["x"], pr["y"])
+        l -= b.get("arm_lat", 0.0)                 # respecto a la garra (corrida a la izquierda)
         # dedos abiertos en V: un prisma que llega entre las puntas se encauza hacia la palma,
         # siempre que quepa entre los dedos
         fits = b.get("claw_open_w", 9.0) >= 2 * h
@@ -491,7 +493,7 @@ class Sim:
                 palm - 0.5 <= f <= r + b["claw_tip"] + h:
             pr["cradled"] = True
             self.log.append((self.world.t, "lleva el prisma en la garra"))
-            pr["x"], pr["y"] = self.to_world(palm, 0.0)
+            pr["x"], pr["y"] = self.to_world(palm, b.get("arm_lat", 0.0))
             return True
         return False
 
@@ -539,6 +541,7 @@ class Sim:
                 # los dedos abiertos encierran el objeto: de lado basta con que quepa entre ellos;
                 # hacia el frente la garra tiene ~2 cm de fondo
                 f, l = self._local(o["x"], o["y"])
+                l -= self.body.get("arm_lat", 0.0)
                 side = max(0.5, (self.body.get("claw_open_w", 9.0) - o["size"]) / 2.0)
                 if abs(f - r) <= 2.0 and abs(l) <= side and abs(o["z"] - cz) <= 2.0:
                     self.held = name
