@@ -13,10 +13,18 @@ menú del CyberPi.
 
 | Flecha en la foto | Clave | Valor |
 | --- | --- | --- |
-| Larga, horizontal, sobre la oruga de arriba: largo de la oruga, de punta a punta | `track_len` | |
-| Larga, vertical, a la izquierda: ancho total, de borde exterior a borde exterior | `robot_w` | |
-| Corta, vertical, abajo a la derecha de la oruga: ancho de la banda | `belt_w` | |
-| Corta, abajo a la izquierda de la oruga: ⚠️ ¿qué mide? (¿alto de la oruga? ¿diámetro de la rueda?) | `sprocket_d`? | |
+| Vista superior A: hueco entre las orugas (borde interior a borde interior) | (`robot_w` = A + 2B) | **15.35** |
+| Vista superior B: ancho de la banda | `belt_w` | **3.0** |
+| Ancho total (calculado) | `robot_w` | **21.35** |
+| Vista lateral C: eje rueda blanca (atrás) → eje 1a rueda negra (tramo apoyado) | `track_c` | **12.1** |
+| Vista lateral D: eje 1a negra → eje 2a negra (nariz levantada) | `track_d` | **4.85** |
+| Inclinación de D sobre el piso (estimada de la foto, falta medir) | `nose_deg` | ~45° |
+| Diámetro de las ruedas (blancas y negras iguales) | `wheel_d`, `sprocket_d` | **3.95** |
+| Grosor de la banda (estimado de la foto, falta medir) | `belt_t` | ~0.4 |
+
+Con esto: largo de la oruga visto desde arriba ≈ 20.3 cm (8.4 detrás del centro de giro y
+11.85 delante, hasta la nariz); nariz 3.4 cm más alta que el tramo apoyado. El centro de giro
+es el punto medio del tramo apoyado (entre los ejes de C).
 
 ## Flechas naranjas (desde la referencia)
 

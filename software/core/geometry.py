@@ -22,15 +22,40 @@ def track_w():
     return p("robot_w") - p("belt_w")
 
 
+def contact_half():
+    """Del centro de giro a cada extremo del tramo apoyado (eje blanco / eje 1a negra)."""
+    return p("track_c") / 2.0
+
+
+def nose_fwd():
+    """Del centro de giro al eje de la rueda de la nariz (horizontal)."""
+    return contact_half() + p("track_d") * math.cos(math.radians(p("nose_deg")))
+
+
+def nose_h():
+    """Altura del eje de la nariz sobre los ejes apoyados (cm)."""
+    return p("track_d") * math.sin(math.radians(p("nose_deg")))
+
+
 def rear_len():
     """Del centro de giro a la parte trasera (punta trasera de las orugas)."""
-    return p("track_len") / 2.0
+    return contact_half() + p("wheel_d") / 2.0 + p("belt_t")
+
+
+def track_front():
+    """Del centro de giro a la punta delantera de las orugas (la nariz)."""
+    return nose_fwd() + p("wheel_d") / 2.0 + p("belt_t")
+
+
+def track_len():
+    """Largo de la oruga de punta a punta, visto desde arriba."""
+    return rear_len() + track_front()
 
 
 def front_len():
     """Del centro de giro a lo más adelantado del robot (oruga o garra en posición de viaje)."""
     claw = claw_reach(p("h_carry")) + p("claw_tip")
-    track = p("track_len") / 2.0
+    track = track_front()
     return claw if claw > track else track
 
 

@@ -219,7 +219,7 @@ def run_once(level=1, seed=0, noise=0.0, line_w=2.0, prog=None, true=None, budge
     return {
         "report": rep, "frames": frames, "events": [(round(t, 2), e) for t, e in log],
         "arena": arena.to_json() if record else None,
-        "robot": {k: cfg.P[k] for k in ("track_len", "robot_w", "belt_w", "sensor_fwd",
+        "robot": {k: dict(cfg.P, **physics.track_dims(cfg.P))[k] for k in ("track_len", "track_off", "nose_h", "robot_w", "belt_w", "sensor_fwd",
                                         "ref_rot_fwd", "probe_pitch", "claw_tip",
                                         "arm_pivot_fwd", "arm_pivot_h")},
         "params": {"level": level, "seed": seed, "noise": noise, "line_w": line_w,

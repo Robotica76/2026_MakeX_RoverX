@@ -64,21 +64,26 @@ L1_SOUTH_CM = 36.0          # de la zona roja al cruce de la línea inferior
 L1_EAST_CM = 61.2           # del cruce hasta tener las sondas sobre el cruce frente al cubo
 L1_CROSS_SLACK = 6.0        # cada tramo se queda corto esto y termina buscando el cruce
 L1_NORTH_CM = 18.4          # del cruce frente al cubo a la altura de la línea que sube a la rampa
-L1_TO_RAMP_CM = 16.2        # de ahí al pie de la rampa gris
+L1_TO_RAMP_CM = 18.7        # de ahí al pie de la rampa gris
 
 # ---- constantes de ruta (TODO: AJUSTAR EN PISTA; salen del plano y se probaron en el simulador)
-L1_BACK_CM = 2.0            # nivel 1: retroceso tras el cubo para poder girar sin barrer el pedestal
-L2_BACK_CM = 3.5            # nivel 2: lo mismo frente al pedestal donde se deja el cubo
+L1_BACK_CM = 4.5            # nivel 1: retroceso tras el cubo para poder girar sin barrer el pedestal
+L2_TO_PED_CM = 9.6          # TODO(pista) nivel 2: línea desde la T hasta la garra sobre el pedestal
+L2_BACK_CM = 6.0            # nivel 2: lo mismo frente al pedestal donde se deja el cubo
 # Rumbos de mapa (pasos "ref" y "head"): 0 = este, 90 = sur, 180 = oeste, -90 = norte, en la
 # vista superior del reglamento. Se fijan con "ref" sobre una recta conocida.
 # Puntos del mapa en cm (x este desde la orilla izquierda, y SUR desde la orilla de arriba),
 # del plano reconstruido (simulation/arena.py). TODO(medir en pista).
-CORRIDOR_START = (151.9, 48.3)   # centro de giro al terminar la línea (2 cm sin línea)
+# El robot mide 21.35 de ancho y la línea entra a ~11 cm del muro de abajo: seguirla hasta su fin
+# dejaba ~0.6 cm y el seguidor, al salir de la curva, tocaba la esquina. Se deja la línea a media
+# curva (rumbo CORRIDOR_START_HEAD) y se entra por el centro de la abertura con odometría.
+CORRIDOR_START_HEAD = 45         # rumbo de mapa a media curva (de sur a este)
+CORRIDOR_START = (135.9, 44.6)   # TODO(pista) centro de giro al pasar por ese rumbo
 CORRIDOR_W1 = (183.0, 45.0)      # lejos del muro de abajo y del de la izquierda (aunque quede ~9 cm corto)
 CORRIDOR_TO_WALL_S = 6.0         # s al norte a v_slow: ~35 cm hasta el muro con patinaje, y empuja
-CORRIDOR_WALL_Y = 0.9 + 9.5      # y del centro de giro con el frente de las orugas en el muro
-CORRIDOR_BACK_CM = 8.0           # retroceso para girar al este (con patinaje queda >= 5 cm: holgura)
-CORRIDOR_EXIT_DY = 6.0           # la recta de salida va 6 cm al sur del muro (centro de la abertura)
+CORRIDOR_WALL_Y = 0.9 + 11.85    # y del centro de giro con la nariz en el muro (geo.track_front())
+CORRIDOR_BACK_CM = 5.5         # retroceso para girar al este: la nariz barre 16 cm de radio (muro a >= 0.5)
+CORRIDOR_EXIT_DY = 1.5         # recta de salida a y 14.25: toma la diagonal de la línea y no la vertical (holgura 2.6 N, 5.5 S)
 # Nivel 2: cruzar la zona de obstáculos (sin línea) de la entrada (abajo a la izquierda) a la
 # salida (arriba a la derecha). Al girar en el lugar el robot barre ~13 cm y la línea termina a
 # 12 cm del muro de abajo, así que el primer giro es suave (lo mostró el simulador).
@@ -86,7 +91,7 @@ CORRIDOR = [
     # Los recortes hacen PATINAR las orugas (con tramos por distancia: 5 % con patinaje en el
     # simulador). La odometría encoders + giroscopio (odometry.py) corrige cuando patina UNA oruga;
     # cuando patinan las dos no hay forma de saberlo, así que la referencia es el muro de arriba:
-    ("pose", CORRIDOR_START[0], CORRIDOR_START[1], 0),   # al terminar la línea
+    ("pose", CORRIDOR_START[0], CORRIDOR_START[1], None),  # a media curva (rumbo: el del IMU)
     ("goto", CORRIDOR_W1[0], CORRIDOR_W1[1]),            # lejos del muro de abajo
     ("square", -90, CORRIDOR_TO_WALL_S, "y", CORRIDOR_WALL_Y),    # al norte hasta el muro: y exacta
     ("straight", -CORRIDOR_BACK_CM, "v_slow"),           # espacio para girar
@@ -148,7 +153,7 @@ BALL_STEPS = [("line", ("color", "red"), "v_slow", 20), ("center",),
               ("head", BALL_HEAD), ("arm", "h_pedestal"), ("claw", "claw_open"),
               ("approach_obj", "h_pedestal", "ball_ped_dist"), ("claw", "claw_ball"),
               ("arm", "h_carry"), ("retreat",), ("hold",), ("head", LINE_HEAD_AT_MARK2)]
-STAIRS_TOP_CM = 7.0         # nivel 4: avance desde que las sondas ven la zona verde (TODO pista)
+STAIRS_TOP_CM = 5.5         # nivel 4: avance desde que las sondas ven la zona verde (TODO pista)
 # Nivel 4: rodear la torre por el sur (al norte está la barra). Se vuelve a la línea con espacio
 # para girar sin barrer la torre (~13 cm de radio) y entre dos tarjetas (lo mostró el simulador).
 TOWER_DETOUR = [
@@ -206,15 +211,18 @@ MISSIONS = [
     {"id": 4, "level": 1, "pts": 100, "name": "Dejar cubo", "critical": False, "end_level": True,
      # ("ref", 0): viene de seguir 50 cm de línea recta hacia el este por la rampa (o se colocó
      # mirando al este al reiniciar aquí); es la mejor referencia de rumbo para el pasillo.
-     "steps": [("ref", 0), ("jturn", -90), ("line", ("junction", 1, "any"), "v_slow", 8),
-               ("arm", "h_pedestal"), ("approach_ped", "h_pedestal", "ped2_from_cross"),
-               ("claw", "claw_open"), ("arm", "h_carry"), ("retreat",),
+     # La nariz de las orugas va 8.85 cm delante de las sondas y el cruce está a ~8 cm del
+     # pedestal: seguir la línea HASTA el cruce choca la nariz con el pedestal. Se sigue la línea
+     # una distancia fija desde la T (garra sobre el centro del pedestal, nariz a ~2 cm de él).
+     "steps": [("ref", 0), ("jturn", -90), ("line", ("cm", L2_TO_PED_CM), "v_slow", 8),
+               ("arm", "h_pedestal"),
+               ("claw", "claw_open"), ("arm", "h_carry"),
                ("straight", -L2_BACK_CM, "v_slow"), ("head", 90)]},
     {"id": 5, "level": 2, "pts": 100, "name": "Zona obstaculos", "critical": True,
      # recién colocado en la zona amarilla (reinicio o arranque en el nivel 2): sondas sobre la
      # T mirando al este, girar al sur hacia el pasillo
      "steps": [("if_placed", [("ref", 0), ("jturn", 90)]),
-               ("line", ("end",), "v_slow", 15)] + CORRIDOR},
+               ("line", ("head", CORRIDOR_START_HEAD, 6), "v_slow", 15)] + CORRIDOR},
     {"id": 6, "level": 2, "pts": 100, "name": "Subir nivel 3", "critical": True, "end_level": True,
      # sigue la línea por la rampa blanca hasta salir de la zona azul (ya completamente dentro)
      # Al ver la zona azul avanza L3_IN_CM: ya completamente dentro, pero antes de la curva de la

@@ -103,7 +103,7 @@ def test_cm_per_deg_from_sprocket():
 def test_reference_point_shift():
     # medidas desde el punto naranja; el punto medio de las orugas está 5 cm adelante
     cfg.P.update({"ref_rot_fwd": 5, "sensor_fwd": 12, "card_probe_fwd": 12,
-                  "track_len": 22, "robot_w": 18, "belt_w": 4})
+                  "track_c": 18, "wheel_d": 3.6, "belt_t": 0.2, "robot_w": 18, "belt_w": 4})
     assert geo.turn_advance() == pytest.approx(7)
     assert geo.card_to_center(100, 100) == pytest.approx(7)
     assert geo.rear_len() == pytest.approx(11)
@@ -114,9 +114,10 @@ def test_reference_point_shift():
 
 
 def test_front_len_is_claw_or_track():
-    cfg.P.update({"track_len": 22, "claw_tip": 3})
+    cfg.P.update({"track_c": 18, "claw_tip": 3})
     assert geo.front_len() >= geo.claw_reach(cfg.P["h_carry"]) + 3 - 1e-9
-    assert geo.front_len() >= 11
+    assert geo.front_len() >= geo.track_front()
+    assert geo.track_len() == pytest.approx(geo.rear_len() + geo.track_front())
     assert geo.robot_len() == pytest.approx(geo.rear_len() + geo.front_len())
 
 

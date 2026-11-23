@@ -31,6 +31,17 @@ class Fallen(Exception):
     """El robot se cayó de un nivel o de la arena (termina la corrida)."""
 
 
+def track_dims(b):
+    """Medidas derivadas de la oruga de 3 ruedas (las mismas cuentas que geometry.py)."""
+    ch = b["track_c"] / 2.0
+    nose = ch + b["track_d"] * math.cos(math.radians(b["nose_deg"]))
+    ext = b["wheel_d"] / 2.0 + b["belt_t"]
+    rear, front = ch + ext, nose + ext
+    return {"contact_half": ch, "nose_fwd": nose, "track_len": rear + front,
+            "track_off": (front - rear) / 2.0,
+            "nose_h": b["track_d"] * math.sin(math.radians(b["nose_deg"]))}
+
+
 class Sim:
     def __init__(self, world, cfg, geo, arena, level=1, noise=0.0, seed=0, true_overrides=None,
                  log=None):
@@ -44,6 +55,7 @@ class Sim:
         self.body = dict(cfg.P)
         if true_overrides:
             self.body.update(true_overrides)
+        self.body.update(track_dims(self.body))
         n = noise
         # parámetros físicos "verdaderos" (con ruido se sortean por corrida)
         self.vmax = 46.0 * (1 + n * self.rng.uniform(-0.08, 0.08))    # cm/s al 100 %
@@ -266,13 +278,14 @@ class Sim:
         self._check_bumps()
 
     def _update_pitch(self):
-        L = self.body["track_len"]
+        h = self.body["contact_half"]                 # apoyo: eje blanco y eje de la 1a negra
+        L = 2 * h
         c, s = math.cos(math.radians(self.yaw)), math.sin(math.radians(self.yaw))
-        hf = self.arena.height(self.x + c * L / 2, self.y + s * L / 2)
-        hr = self.arena.height(self.x - c * L / 2, self.y - s * L / 2)
-        # una punta sin piso debajo (borde de un nivel) no cambia el pitch: queda apoyado al centro
-        # (la escalera tiene ~34°: con la punta a L/2 = 9.5 cm la diferencia llega a ~6.5 cm)
-        lim = L / 2.0 + 1.0
+        hf = self.arena.height(self.x + c * h, self.y + s * h)
+        hr = self.arena.height(self.x - c * h, self.y - s * h)
+        # un apoyo sin piso debajo (borde de un nivel) no cambia el pitch: queda apoyado al centro
+        # (la escalera tiene ~34°: con el apoyo a 6 cm la diferencia llega a ~4 cm)
+        lim = h + 1.0
         if hf is None or abs(hf - self.z) > lim:
             hf = self.z
         if hr is None or abs(hr - self.z) > lim:
@@ -291,12 +304,13 @@ class Sim:
     def tip_margin(self):
         """cm entre el punto donde la gravedad + la inercia cruzan el piso y la punta de la oruga
         más cercana (negativo = se vuelca). Positivo hacia adelante = margen trasero."""
-        L = self.body["track_len"]
+        b = self.body
         xc, zc = self.com()
         g = 981.0
         p = math.radians(self.pitch)
         x_hit = xc - zc * (g * math.sin(p) + self.acc) / (g * math.cos(p))
-        return min(x_hit + L / 2.0, L / 2.0 - x_hit), x_hit
+        # atrás se vuelca sobre el eje de la rueda blanca; adelante cae sobre la nariz
+        return min(x_hit + b["contact_half"], b["nose_fwd"] - x_hit), x_hit
 
     def _check_tip(self):
         margin, x_hit = self.tip_margin()
@@ -337,7 +351,7 @@ class Sim:
         trac = [1.0, 1.0]
         now = set()
         for k, side in enumerate((1, -1)):          # oruga izquierda (+lateral), derecha
-            cx, cy = self.to_world(0.0, side * off)
+            cx, cy = self.to_world(b["track_off"], side * off)
             belt = ar.rect_poly(cx, cy, math.radians(self.yaw), b["track_len"], b["belt_w"])
             for i, r in enumerate(items):
                 if ar.polys_overlap(belt, ar.rect_to_poly(r)):
@@ -367,7 +381,10 @@ class Sim:
         x = self.x if x is None else x
         y = self.y if y is None else y
         yaw = self.yaw if yaw is None else yaw
-        return ar.rect_poly(x, y, math.radians(yaw), b["track_len"], b["robot_w"])
+        o = b["track_off"]                       # la nariz hace la oruga más larga adelante
+        r = math.radians(yaw)
+        return ar.rect_poly(x + o * math.cos(r), y + o * math.sin(r), r, b["track_len"],
+                            b["robot_w"])
 
     def arm_h(self):
         """Altura del centro de la garra según el ángulo del servo del brazo (cm sobre el robot)."""

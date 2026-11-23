@@ -70,6 +70,11 @@ def make_cond(spec):
         return lf.line_end()
     if kind == "pitch":
         return lf.pitch_above(cfg.P["pitch_ramp"])
+    if kind == "head":
+        # ("head", rumbo de mapa, tolerancia): en una curva de la línea, parar al pasar por ese
+        # rumbo (p. ej. a media curva, antes de que el seguidor se abra hacia un muro)
+        target, tol = spec[1], spec[2]
+        return lambda bits, j: abs(motion.wrap180(target - heading_ref - hal.heading())) < tol
     raise ValueError("condicion desconocida: %s" % kind)
 
 
@@ -241,8 +246,10 @@ def run_step(step):
         return motion.straight(val(step[2]), speed, target=target)
     if kind == "pose":
         # ("pose", x, y, rumbo): posición conocida en el mapa (cm; x este, y sur) -> odometría
-        odo.set_pose(step[1], step[2], step[3])
-        heading_ref = step[3] - hal.heading()
+        # rumbo None: el que ya trae ("ref" anterior + giroscopio), solo se fija la posición
+        hdg = step[3] if step[3] is not None else heading_ref + hal.heading()
+        odo.set_pose(step[1], step[2], hdg)
+        heading_ref = hdg - hal.heading()
         return True
     if kind == "square":
         # ("square", rumbo, segundos, coord, valor[, vel]): avanzar despacio DURANTE ese tiempo

@@ -37,13 +37,20 @@ P = {
     # sobre la caja del mBot2). El centro de giro real de un robot de orugas es el punto medio de
     # las orugas a lo largo; ref_rot_fwd dice cuánto está adelante de la referencia.
     "ref_rot_fwd": 4.5,      # TODO(medir) referencia -> punto medio de las orugas (+ = adelante)
-    "track_len": 19.0,       # TODO(medir) largo de la oruga (de punta a punta)
-    "belt_w": 4.0,           # TODO(medir) ancho de la banda de cada oruga
-    "robot_w": 18.5,         # TODO(medir) ancho total, de borde exterior a borde exterior de las orugas
+    # oruga de 3 ruedas (vista lateral): rueda blanca atrás y dos negras adelante; la última
+    # negra va levantada (nariz) para subir escalones. El robot se apoya entre la blanca y la
+    # primera negra: ahí está el centro de giro (punto medio del apoyo). geometry.track_len()
+    "track_c": 12.1,         # MEDIDO (C): eje rueda blanca -> eje 1a negra (tramo apoyado en el piso)
+    "track_d": 4.85,         # MEDIDO (D): eje 1a negra -> eje 2a negra (nariz levantada)
+    "nose_deg": 45.0,        # TODO(medir) inclinación de D sobre el piso (estimada de la foto)
+    "wheel_d": 3.95,         # MEDIDO: diámetro de las ruedas (blanca y negras miden igual)
+    "belt_t": 0.4,           # TODO(medir) grosor de la banda (de la foto)
+    "belt_w": 3.0,           # MEDIDO (B, vista superior): ancho de la banda de cada oruga
+    "robot_w": 21.35,        # MEDIDO: A 15.35 (hueco entre orugas) + 2*B; borde exterior a borde exterior
     "sensor_fwd": 7.5,       # TODO(medir) referencia -> sondas del Quad RGB
     "probe_pitch": 1.3,      # TODO(medir) separación entre sondas vecinas del Quad RGB
     "card_probe_fwd": 7.5,   # TODO(medir) referencia -> sonda que lee las tarjetas (la misma barra del Quad RGB)
-    "sprocket_d": 4.4,       # TODO(medir) diámetro efectivo de la rueda motriz de la oruga
+    "sprocket_d": 3.95,      # MEDIDO: rueda motriz 3.95 (la banda la agranda un poco: lo absorbe "slip")
     "skid": 1.3,             # TODO(calibrar) derrape al girar: B efectivo = distancia entre orugas * skid
                              # (girar 360° en el lugar: grados de encoder vs giroscopio)
     "slip_tol": 0.05,
@@ -135,7 +142,7 @@ TUNE = [
     ("Linea", "cross_th", 0.05, 0.3, 1),
     ("Linea", "line_mode", 1, 0, 1), ("Linea", "green", 1, 0, 1),
     ("Geometria", "ref_rot_fwd", 0.5, -20, 20), ("Geometria", "sensor_fwd", 0.5, -10, 40),
-    ("Geometria", "card_probe_fwd", 0.5, -10, 40), ("Geometria", "track_len", 0.5, 5, 50),
+    ("Geometria", "card_probe_fwd", 0.5, -10, 40), ("Geometria", "track_c", 0.5, 5, 40),
     ("Geometria", "belt_w", 0.5, 1, 10), ("Geometria", "robot_w", 0.5, 10, 40),
     ("Geometria", "sprocket_d", 0.1, 2, 10),
     ("Geometria", "slip", 0.02, 0.5, 1.5),
