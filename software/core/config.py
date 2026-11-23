@@ -47,34 +47,47 @@ P = {
     "belt_t": 0.4,           # TODO(medir) grosor de la banda (de la foto)
     "belt_w": 3.0,           # MEDIDO (B, vista superior): ancho de la banda de cada oruga
     "robot_w": 21.35,        # MEDIDO: A 15.35 (hueco entre orugas) + 2*B; borde exterior a borde exterior
-    "sensor_fwd": 7.5,       # TODO(medir) referencia -> sondas del Quad RGB
-    "probe_pitch": 1.3,      # TODO(medir) separación entre sondas vecinas del Quad RGB
-    "card_probe_fwd": 7.5,   # TODO(medir) referencia -> sonda que lee las tarjetas (la misma barra del Quad RGB)
-    "sprocket_d": 3.95,      # MEDIDO: rueda motriz 3.95 (la banda la agranda un poco: lo absorbe "slip")
+    # MEDIDO (vista inferior): sondas 11.25 cm delante del eje de los motores (rueda blanca) =
+    # 11.25 - track_c/2 = 5.2 delante del centro de giro; aquí desde la referencia
+    "sensor_fwd": 9.7,       # = ref_rot_fwd (4.5) + 5.2; si se mide ref_rot_fwd, ajustar
+    "probe_pitch": 1.25,     # MEDIDO: entre las dos sondas centrales del Quad RGB (L1-R1)
+    "probe_outer": 2.4,      # MEDIDO: de cada sonda central a la de afuera (L1-L2, R1-R2)
+    "card_probe_fwd": 9.7,   # la misma barra del Quad RGB (ver sensor_fwd)
+    # PRUEBA "avanza 100 cm" de mBlock: la oruga izquierda avanzó 63.5 y la derecha 65. mBlock
+    # cuenta con la rueda del mBot2 (6.5 cm, TODO confirmar): diámetro efectivo de la oruga =
+    # 6.5 * 64.25/100 = 4.18 (rueda 3.95 + la banda, cuadra). Verificar con "Probar recta 50".
+    "sprocket_d": 4.18,      # CALIBRADO: diámetro efectivo (promedio de las dos orugas)
+    # El programa de prueba del equipo (FuncionesEnPython.mblock) para los giros cuando
+    # lectura * 1.3 >= ángulo pedido "por error del sensor". Puede ser escala del giroscopio
+    # (entonces gyro_scale = 1.3) o inercia al parar con giro sin frenado (aquí turn_to ya frena
+    # cerca del objetivo). TODO(medir): girar a mano 360° y leer el giroscopio.
+    "gyro_scale": 1.0,       # TODO(calibrar) grados reales por grado leído
+    "lr_ratio": 0.977,       # CALIBRADO: cm por grado izquierda / derecha (63.5 / 65)
     "skid": 1.3,             # TODO(calibrar) derrape al girar: B efectivo = distancia entre orugas * skid
                              # (girar 360° en el lugar: grados de encoder vs giroscopio)
     "slip_tol": 0.05,
     "track_k": 4.0,          # grados de corrección de rumbo por cm de desvío lateral (odometry.track)        # grados por ciclo de diferencia giroscopio/encoders para sospechar patinaje
     "slip": 1.0,             # TODO(calibrar con "Probar recta 50") distancia real / teórica
 
-    # --- brazo de paralelogramo (MEDIR). Altura = altura del pivote + largo * sen(ángulo)
-    "arm_pivot_fwd": 10.0,   # TODO(medir) referencia -> eje del servo del brazo (horizontal)
-    "arm_pivot_h": 10.0,     # TODO(medir) altura del eje del servo del brazo sobre el piso
-    "arm_w": 4.9,            # MEDIDO (F, vista superior): ancho del brazo (entre sus dos barras)
-    # MEDIDO (E = 5.97, del borde interior de la oruga izquierda al brazo): el brazo no va al
-    # centro, va corrido a la IZQUIERDA: 5.97 + 4.9/2 - 15.35/2 = 0.745 cm
-    "arm_lat": 0.745,        # desplazamiento lateral del brazo y la garra (+ = izquierda)
-    "arm_len": 9.0,          # TODO(medir) largo de las barras del paralelogramo, eje a eje
-    "arm_grip_dx": 3.0,      # TODO(medir) del eje del extremo del brazo al centro de la garra (horizontal)
-    "arm_grip_dz": -1.0,     # TODO(medir) del eje del extremo del brazo al centro de la garra (vertical, - = abajo)
-    "claw_tip": 3.0,         # TODO(medir) del centro de la garra a su punta delantera
-    "arm_zero": 90,          # TODO(calibrar) ángulo del servo con el brazo HORIZONTAL
-    "arm_dir": -1,           # TODO(calibrar) +1 si subir el ángulo sube el brazo, -1 si lo baja
-    "h_floor": 2.5,          # altura de agarre: cubo/pelota en el piso
+    # --- brazo (fotos con el servo a 0, 45 y 90 grados). NO es un paralelogramo: la garra gira
+    # al subir (a 90° apunta hacia arriba, encima de la nariz). Se describe con una TABLA: para
+    # cada ángulo del servo, altura del centro de la garra (entre los dedos) sobre el piso y
+    # cuánto va DELANTE de la nariz de las orugas (+ adelante). Entre ángulos se interpola.
+    # TODO(medir): las alturas y distancias son estimadas de las fotos; medir con regla.
+    "arm_h0": 8.5,           # TODO(medir) servo 0°: brazo al frente, ~10° bajo la horizontal
+    "arm_x0": 8.0,           # TODO(medir)
+    "arm_h45": 14.5,         # TODO(medir) servo 45°: garra un poco inclinada hacia arriba
+    "arm_x45": 6.0,          # TODO(medir)
+    "arm_h90": 23.0,         # TODO(medir) servo 90°: garra apuntando hacia arriba, sobre la nariz
+    "arm_x90": 0.0,          # TODO(medir)
+    "arm_pivot_fwd": 10.0,   # TODO(medir) referencia -> eje fijo de arriba del brazo (solo para dibujar)
+    "arm_pivot_h": 12.2,     # MEDIDO (G): piso -> eje fijo de arriba del brazo
+    "claw_tip": 3.0,         # TODO(medir) del centro de la garra a la punta de los dedos
+    "h_floor": 8.5,          # lo más bajo que llega (servo 0°); el brazo no alcanza el piso
     "h_pedestal": 12.5,      # sobre el pedestal (10 cm + medio cubo)
     "h_carry": 17.5,         # transporte: base del cubo >= 5 cm sobre el pedestal (10 + 5 + 2.5)
     "h_bar": 12.0,           # barra de pelotas (10 cm)
-    "h_prism": 4.0,          # garra baja y abierta para llevar el prisma como en una cuna (misión 7)
+    "h_prism": 8.5,          # lo más baja (servo 0°), abierta: lleva el prisma como en una cuna (misión 7)
 
     # --- garra (CALIBRAR)
     "claw_open": 90,         # TODO(calibrar)
@@ -121,12 +134,12 @@ P = {
     "tip_slew": 120,         # %/s: cuánto puede subir la potencia por segundo inclinado
     "slope_min_v": 4.0,      # cm/s: subiendo más lento que esto (o resbalando) -> asistencia
     "slope_boost": 60,       # %/s: cuánto sube la potencia extra mientras haga falta (máx. +60)
-    "h_top": 18.0,           # brazo al máximo (garra lo más recogida): arranque en la zona verde
-    "h_climb": 8.0,          # garra baja y al frente al subir: adelanta y baja el centro de masa
+    "h_top": 23.0,           # servo a 90°: garra arriba, encima de la nariz (rodear la torre)
+    "h_climb": 8.5,          # servo a 0°: garra baja y al frente al subir (adelanta y baja el centro de masa)
 
     # --- medidas de la PISTA (MEDIR en la pista de prueba; sin ultrasónico son la referencia)
     # TODO(medir en pista): valores sacados del plano del reglamento (simulation/arena.py)
-    "ped1_from_cross": 11.1, # nivel 1: del cruce frente al cubo al centro del pedestal
+    "ped1_from_cross": 12.4, # TODO(pista) nivel 1: de donde las sondas VEN el cruce (su orilla cercana) al centro del pedestal
     "ped2_from_cross": 11.1, # nivel 2: del cruce antes del pedestal al centro del pedestal
     "ball_ped_dist": 23.6,   # nivel 3: del centro de la línea (en la marca roja) al centro del pedestal
     "tower_from_edge": 7.5,  # nivel 4: del borde de salida de la zona verde a la cara de la torre
@@ -148,12 +161,11 @@ TUNE = [
     ("Geometria", "ref_rot_fwd", 0.5, -20, 20), ("Geometria", "sensor_fwd", 0.5, -10, 40),
     ("Geometria", "card_probe_fwd", 0.5, -10, 40), ("Geometria", "track_c", 0.5, 5, 40),
     ("Geometria", "belt_w", 0.5, 1, 10), ("Geometria", "robot_w", 0.5, 10, 40),
-    ("Geometria", "sprocket_d", 0.1, 2, 10),
+    ("Geometria", "sprocket_d", 0.02, 2, 10), ("Geometria", "lr_ratio", 0.005, 0.9, 1.1), ("Geometria", "gyro_scale", 0.01, 0.5, 2),
     ("Geometria", "slip", 0.02, 0.5, 1.5),
-    ("Brazo", "arm_zero", 2, 0, 180), ("Brazo", "arm_dir", 2, -1, 1),
-    ("Brazo", "arm_pivot_fwd", 0.5, -10, 40), ("Brazo", "arm_pivot_h", 0.5, 0, 30),
-    ("Brazo", "arm_len", 0.5, 2, 30), ("Brazo", "arm_grip_dx", 0.5, -10, 20),
-    ("Brazo", "arm_grip_dz", 0.5, -15, 15),
+    ("Brazo", "arm_h0", 0.5, 0, 40), ("Brazo", "arm_x0", 0.5, -20, 30),
+    ("Brazo", "arm_h45", 0.5, 0, 40), ("Brazo", "arm_x45", 0.5, -20, 30),
+    ("Brazo", "arm_h90", 0.5, 0, 40), ("Brazo", "arm_x90", 0.5, -20, 30),
     ("Brazo", "h_pedestal", 0.5, 0, 30), ("Brazo", "h_carry", 0.5, 0, 30),
     ("Brazo", "h_bar", 0.5, 0, 30), ("Brazo", "h_prism", 0.5, 0, 30), ("Brazo", "h_floor", 0.5, 0, 30),
     ("Garra", "claw_open", 2, 0, 180), ("Garra", "claw_cube", 2, 0, 180),

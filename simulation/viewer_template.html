@@ -282,7 +282,8 @@ function drawFrame() {
   const c = Math.cos(yaw * Math.PI / 180), s = Math.sin(yaw * Math.PI / 180);
   const sf = R.sensor_fwd - R.ref_rot_fwd;
   for (let k = 0; k < 4; k++) {
-    const lat = -(k - 1.5) * R.probe_pitch;
+    const pi = R.probe_pitch / 2, po = R.probe_outer || R.probe_pitch;
+    const lat = -[-pi - po, -pi, pi, pi + po][k];
     const [qx, qy] = T(x + c * sf - s * lat, y + s * sf + c * lat);
     cx.fillStyle = "#ff3d00"; cx.beginPath(); cx.arc(qx, qy, Math.max(1.5, 0.35 * K), 0, 7); cx.fill();
   }
@@ -626,7 +627,7 @@ if (D.live) {
   const claw = new THREE.Mesh(new THREE.BoxGeometry(R.claw_tip + 2, 2.5, 6),
                               new THREE.MeshLambertMaterial({ color: 0xff8c00 }));
   robot.add(claw);
-  const probes = new THREE.Mesh(new THREE.BoxGeometry(1, 0.6, R.probe_pitch * 3 + 1),
+  const probes = new THREE.Mesh(new THREE.BoxGeometry(1, 0.6, R.probe_pitch + 2 * (R.probe_outer || R.probe_pitch) + 1),
                                 new THREE.MeshLambertMaterial({ color: 0xff3d00 }));
   probes.position.set(R.sensor_fwd - R.ref_rot_fwd, 0.6, 0); robot.add(probes);
 

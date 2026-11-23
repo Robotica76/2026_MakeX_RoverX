@@ -150,9 +150,9 @@ def _encoder_deg():
 
 def tracks_cm():
     """(izquierda, derecha): avance de cada oruga en cm desde el arranque, con signo."""
-    k = geo.cm_per_deg()
-    return (cfg.LEFT_SIGN * mbot2.EM_get_angle("EM1") * k,
-            cfg.RIGHT_SIGN * mbot2.EM_get_angle("EM2") * k)
+    kl, kr = geo.cm_per_deg_lr()
+    return (cfg.LEFT_SIGN * mbot2.EM_get_angle("EM1") * kl,
+            cfg.RIGHT_SIGN * mbot2.EM_get_angle("EM2") * kr)
 
 
 def reset_odometer():
@@ -176,7 +176,9 @@ def servo(port, angle):
 
 # ---------------------------------------------------------------- giroscopio
 def _raw_heading():
-    return cfg.HEADING_SIGN * cyberpi.get_rotation("z")
+    # gyro_scale: grados reales por grado que reporta el giroscopio (TODO calibrar: girar el
+    # robot A MANO 360° contra una escuadra y leer get_rotation("z"); 360 / lectura)
+    return cfg.HEADING_SIGN * cyberpi.get_rotation("z") * cfg.P.get("gyro_scale", 1.0)
 
 
 def reset_heading():
@@ -223,15 +225,19 @@ def offset_from(dk):
     for i in range(4):
         if dk[PROBES[i]] < base:
             base = dk[PROBES[i]]
+    # posición real de cada sonda en cm (no están igual de separadas: 2.4 / 1.25 / 2.4)
+    pi = cfg.P["probe_pitch"] / 2.0
+    po = pi + cfg.P.get("probe_outer", cfg.P["probe_pitch"])
+    lat = (-po, -pi, pi, po)
     total = 0
     acc = 0
     for i in range(4):
         d = dk[PROBES[i]] - base
         total += d
-        acc += d * (i - 1.5)
+        acc += d * lat[i]
     if total < 0.05:
         return 0
-    return clamp(acc / total / 1.5 * 100, -100, 100)
+    return clamp(acc / total / po * 100, -100, 100)
 
 
 def line_offset():

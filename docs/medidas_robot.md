@@ -58,3 +58,22 @@ Poner una cinta en el piso bajo el punto naranja y, desde el menú, usar *Probar
 veces. El punto que **no se mueve** al girar es el centro de giro; su distancia al punto naranja
 es `ref_rot_fwd` (positiva si está adelante). Con orugas, el centro real puede correrse hacia
 donde está el peso: el valor medido así es el bueno.
+
+## Más medidas (22 nov)
+
+| Medida | Clave | Valor |
+| --- | --- | --- |
+| G: piso → eje fijo de arriba del brazo | `arm_pivot_h` | **12.2** |
+| Sondas del Quad RGB delante del eje de los motores (rueda blanca) | `sensor_fwd` | **11.25** (= 5.2 delante del centro de giro) |
+| Entre las dos sondas centrales | `probe_pitch` | **1.25** |
+| De sonda central a sonda de afuera | `probe_outer` | **2.4** |
+| Prueba "avanza 100 cm" de mBlock: izquierda / derecha | `sprocket_d`, `lr_ratio` | 63.5 / 65 → 4.18 cm, 0.977 |
+
+**Brazo**: fotos con el servo a 0°, 45° y 90°. No es paralelogramo (la garra gira; a 90° apunta
+hacia arriba sobre la nariz). Se describe con la tabla `arm_h0/arm_x0`, `arm_h45/arm_x45`,
+`arm_h90/arm_x90`: altura del centro de la garra (entre los dedos) sobre el piso y cuánto va
+delante de la nariz. **Falta medir con regla** esas seis distancias (hoy son estimadas de las fotos).
+
+**Giroscopio** (`gyro_scale`, falta): girar el robot A MANO 360° contra una escuadra y leer
+`cyberpi.get_rotation("z")`. gyro_scale = 360 / lectura. El programa de prueba del equipo usa
+1.3; si la escala real es 1.3 y el programa usa 1.0, en el simulador no saca puntos.

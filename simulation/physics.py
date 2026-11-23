@@ -37,7 +37,7 @@ def track_dims(b):
     nose = ch + b["track_d"] * math.cos(math.radians(b["nose_deg"]))
     ext = b["wheel_d"] / 2.0 + b["belt_t"]
     rear, front = ch + ext, nose + ext
-    return {"contact_half": ch, "nose_fwd": nose, "track_len": rear + front,
+    return {"contact_half": ch, "nose_fwd": nose, "track_len": rear + front, "track_front": front,
             "track_off": (front - rear) / 2.0,
             "nose_h": b["track_d"] * math.sin(math.radians(b["nose_deg"]))}
 
@@ -143,6 +143,12 @@ class Sim:
         error de colocación. Conserva el objeto que lleva en la garra."""
         n = self.noise if noise is None else noise
         x, y, yaw = self.arena.start_pose(level)
+        if level == 2:
+            # en el nivel 2 el equipo coloca las SONDAS sobre la T (la pose del plano supone las
+            # sondas 3 cm delante del centro de giro): correr el centro según el robot real
+            back = (self.body["sensor_fwd"] - self.body["ref_rot_fwd"]) - 3.0
+            x -= back * math.cos(math.radians(yaw))
+            y -= back * math.sin(math.radians(yaw))
         self.x = x + self.rng.gauss(0, 0.7) * n
         self.y = y + self.rng.gauss(0, 0.7) * n
         self.yaw = yaw + self.rng.gauss(0, 1.5) * n
@@ -220,8 +226,9 @@ class Sim:
         self.world.enc[0] += dl * self.cfg.LEFT_SIGN
         self.world.enc[1] += dr * self.cfg.RIGHT_SIGN
         # movimiento real sobre el piso
-        gl = self.vl * self.trac[0]                            # avance real de cada oruga
-        gr = self.vr * self.trac[1]
+        r = b.get("lr_ratio", 1.0)                              # la izquierda avanza menos por grado
+        gl = self.vl * self.trac[0] * 2.0 * r / (1.0 + r)      # avance real de cada oruga
+        gr = self.vr * self.trac[1] * 2.0 / (1.0 + r)
         v = self.slip_true * (gl + gr) / 2.0
         tw = (b["robot_w"] - b["belt_w"]) * self.skid
         w = self.slip_true * (gr - gl) / tw                    # rad/s, antihorario
@@ -251,7 +258,7 @@ class Sim:
         # giroscopio del CyberPi: rot_z = rumbo antihorario (HEADING_SIGN = -1 en config)
         dyaw = self.yaw - self._last_yaw
         self._last_yaw = self.yaw
-        self.world.rot_z += dyaw + self.gyro_drift / 60.0 * dt
+        self.world.rot_z += dyaw / self.body.get("gyro_scale", 1.0) + self.gyro_drift / 60.0 * dt
         if self.world.servos != self._servos:
             self._servos = dict(self.world.servos)
             self.update_gripper()
@@ -386,19 +393,26 @@ class Sim:
         return ar.rect_poly(x + o * math.cos(r), y + o * math.sin(r), r, b["track_len"],
                             b["robot_w"])
 
-    def arm_h(self):
-        """Altura del centro de la garra según el ángulo del servo del brazo (cm sobre el robot)."""
+    def _arm(self):
+        """(altura de la garra sobre el robot, cm delante de la nariz) según el servo (tabla)."""
         b = self.body
-        ang = self.world.servos.get(self.cfg.SERVO_ARM, b["arm_zero"])
-        th = (ang - b["arm_zero"]) / (b["arm_dir"] or 1)
-        th = max(-90.0, min(90.0, th))
-        return b["arm_pivot_h"] + b["arm_len"] * math.sin(math.radians(th)) + b["arm_grip_dz"], th
+        rows = ((0, b["arm_h0"], b["arm_x0"]), (45, b["arm_h45"], b["arm_x45"]),
+                (90, b["arm_h90"], b["arm_x90"]))
+        ang = max(0.0, min(90.0, self.world.servos.get(self.cfg.SERVO_ARM, 45)))
+        for i in range(2):
+            a0, h0, x0 = rows[i]
+            a1, h1, x1 = rows[i + 1]
+            if ang <= a1:
+                f = (ang - a0) / (a1 - a0)
+                return h0 + f * (h1 - h0), x0 + f * (x1 - x0)
+        return rows[-1][1], rows[-1][2]
+
+    def arm_h(self):
+        """Altura del centro de la garra (cm sobre el robot) y ángulo del servo."""
+        return self._arm()[0], self.world.servos.get(self.cfg.SERVO_ARM, 45)
 
     def claw_reach(self):
-        b = self.body
-        h, th = self.arm_h()
-        return (b["arm_pivot_fwd"] - b["ref_rot_fwd"] + b["arm_len"] * math.cos(math.radians(th))
-                + b["arm_grip_dx"])
+        return self.body["track_front"] + self._arm()[1]
 
     def claw_point(self):
         """(x, y, z) del centro de la garra en la pista."""
@@ -595,7 +609,7 @@ class Sim:
     def probe_pos(self, probe):
         b = self.body
         i = self.cfg.PROBES.index(probe)
-        lat = (i - 1.5) * b["probe_pitch"]                      # negativo = izquierda
+        lat = self.geo.probe_lat(i, b["probe_pitch"], b.get("probe_outer", b["probe_pitch"]))  # - = izquierda
         return self.to_world(b["sensor_fwd"] - b["ref_rot_fwd"], -lat)
 
     def _samples(self, probe):

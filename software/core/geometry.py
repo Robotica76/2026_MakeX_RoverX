@@ -68,33 +68,53 @@ def cm_per_deg():
     return math.pi * p("sprocket_d") / 360.0 * p("slip")
 
 
-# ---------------------------------------------------------------- brazo de paralelogramo
-def arm_theta(h):
-    """Ángulo del brazo (grados sobre la horizontal) para que la garra quede a la altura h."""
-    tip = h - p("arm_grip_dz")
-    s = (tip - p("arm_pivot_h")) / p("arm_len")
-    if s > 1:
-        s = 1
-    if s < -1:
-        s = -1
-    return math.asin(s) * 180.0 / math.pi      # sin math.degrees (MicroPython)
+def cm_per_deg_lr():
+    """(izquierda, derecha): cm por grado de cada oruga. No avanzan igual por grado (prueba de
+    1 m: 63.5 y 65); su promedio es cm_per_deg()."""
+    k = cm_per_deg()
+    r = p("lr_ratio")
+    return k * 2.0 * r / (1.0 + r), k * 2.0 / (1.0 + r)
+
+
+# ---------------------------------------------------------------- brazo (tabla medida)
+ARM_ANGLES = (0, 45, 90)     # ángulos del servo de la tabla (fotos); fuera de 0..90 no se usa
+
+
+def _arm_rows():
+    return ((0, p("arm_h0"), p("arm_x0")), (45, p("arm_h45"), p("arm_x45")),
+            (90, p("arm_h90"), p("arm_x90")))
+
+
+def arm_at(servo):
+    """(altura de la garra sobre el piso, cm delante de la nariz) con el servo a ese ángulo."""
+    rows = _arm_rows()
+    if servo <= rows[0][0]:
+        return rows[0][1], rows[0][2]
+    for i in range(len(rows) - 1):
+        a0, h0, x0 = rows[i]
+        a1, h1, x1 = rows[i + 1]
+        if servo <= a1:
+            f = (servo - a0) / float(a1 - a0)
+            return h0 + f * (h1 - h0), x0 + f * (x1 - x0)
+    return rows[-1][1], rows[-1][2]
 
 
 def arm_servo(h):
-    """Ángulo del servo del brazo para la altura h (cm sobre el piso)."""
-    a = p("arm_zero") + p("arm_dir") * arm_theta(h)
-    if a < 0:
-        return 0
-    if a > 180:
-        return 180
-    return a
+    """Ángulo del servo del brazo para la altura h (cm sobre el piso); fuera del alcance, el tope."""
+    rows = _arm_rows()
+    if h <= rows[0][1]:
+        return rows[0][0]
+    for i in range(len(rows) - 1):
+        a0, h0, _ = rows[i]
+        a1, h1, _ = rows[i + 1]
+        if h <= h1:
+            return a0 + (h - h0) / (h1 - h0) * (a1 - a0)
+    return rows[-1][0]
 
 
 def claw_reach(h):
-    """Distancia horizontal del centro de giro al centro de la garra, con la garra a la altura h.
-    Al subir o bajar el brazo, la garra se acerca al robot (cos del ángulo)."""
-    t = arm_theta(h) * math.pi / 180.0
-    return fwd("arm_pivot_fwd") + p("arm_len") * math.cos(t) + p("arm_grip_dx")
+    """Distancia horizontal del centro de giro al centro de la garra, con la garra a la altura h."""
+    return track_front() + arm_at(arm_servo(h))[1]
 
 
 # ---------------------------------------------------------------- distancias de maniobra
@@ -151,4 +171,10 @@ def card_to_center(card_odo, now_odo):
 def probe_x(probe):
     """Posición lateral de cada sonda (cm, negativo = izquierda)."""
     i = cfg.PROBES.index(probe)
-    return (i - 1.5) * p("probe_pitch")
+    return probe_lat(i, p("probe_pitch"), p("probe_outer"))
+
+
+def probe_lat(i, pitch, outer):
+    """Sonda i (0..3, de izquierda a derecha) -> cm laterales (no están igual de separadas)."""
+    inner = pitch / 2.0
+    return (-inner - outer, -inner, inner, inner + outer)[i]

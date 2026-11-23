@@ -59,9 +59,8 @@ def geometry_warnings():
     """Avisos de geometría que el programa no detecta solo."""
     out = []
     P = cfg.P
-    top = P["arm_pivot_h"] + P["arm_len"] + P["arm_grip_dz"]
-    low = P["arm_pivot_h"] - P["arm_len"] + P["arm_grip_dz"]
-    for k in ("h_floor", "h_pedestal", "h_carry", "h_bar"):
+    low, top = min(P["arm_h0"], P["arm_h90"]), max(P["arm_h0"], P["arm_h90"])
+    for k in ("h_pedestal", "h_carry", "h_bar"):
         if P[k] > top + 0.01 or P[k] < low - 0.01:
             out.append("el brazo no alcanza %s = %.1f cm (rango %.1f .. %.1f)" % (k, P[k], low, top))
     lift = P["h_carry"] - ar.CUBE_SIZE / 2 - ar.PEDESTAL_H
@@ -220,7 +219,7 @@ def run_once(level=1, seed=0, noise=0.0, line_w=2.0, prog=None, true=None, budge
         "report": rep, "frames": frames, "events": [(round(t, 2), e) for t, e in log],
         "arena": arena.to_json() if record else None,
         "robot": {k: dict(cfg.P, **physics.track_dims(cfg.P))[k] for k in ("track_len", "track_off", "nose_h", "robot_w", "belt_w", "sensor_fwd",
-                                        "ref_rot_fwd", "probe_pitch", "claw_tip",
+                                        "ref_rot_fwd", "probe_pitch", "probe_outer", "claw_tip",
                                         "arm_pivot_fwd", "arm_pivot_h")},
         "params": {"level": level, "seed": seed, "noise": noise, "line_w": line_w,
                    "ramp_deg": ramp_deg,

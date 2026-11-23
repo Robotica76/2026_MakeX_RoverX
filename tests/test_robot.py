@@ -74,25 +74,17 @@ def test_offset_zero_without_line():
 
 
 # ---------------------------------------------------------------- geometría
-def test_arm_horizontal_at_pivot_height():
-    h = cfg.P["arm_pivot_h"] + cfg.P["arm_grip_dz"]
-    assert geo.arm_servo(h) == pytest.approx(cfg.P["arm_zero"])
-    full = geo.fwd("arm_pivot_fwd") + cfg.P["arm_len"] + cfg.P["arm_grip_dx"]
-    assert geo.claw_reach(h) == pytest.approx(full)
+def test_arm_table_interpolates_and_inverts():
+    cfg.P.update({"arm_h0": 8, "arm_x0": 8, "arm_h45": 14, "arm_x45": 6, "arm_h90": 23, "arm_x90": 0})
+    assert geo.arm_at(45) == pytest.approx((14, 6))
+    assert geo.arm_at(22.5) == pytest.approx((11, 7))
+    assert geo.arm_servo(11) == pytest.approx(22.5)
+    assert geo.arm_servo(2) == 0 and geo.arm_servo(40) == 90      # fuera de alcance: topes
+    assert geo.claw_reach(14) == pytest.approx(geo.track_front() + 6)
 
 
-def test_arm_direction_and_limits():
-    hi = geo.arm_servo(cfg.P["arm_pivot_h"] + 4)
-    lo = geo.arm_servo(cfg.P["arm_pivot_h"] - 6)
-    assert (hi - lo) * cfg.P["arm_dir"] > 0
-    assert 0 <= geo.arm_servo(100) <= 180
-    cfg.P["arm_dir"] = 1
-    assert geo.arm_servo(cfg.P["arm_pivot_h"] + 4) > cfg.P["arm_zero"]
-
-
-def test_claw_gets_closer_when_arm_tilts():
-    h0 = cfg.P["arm_pivot_h"] + cfg.P["arm_grip_dz"]
-    assert geo.claw_reach(h0 + 6) < geo.claw_reach(h0)
+def test_claw_gets_closer_when_arm_rises():
+    assert geo.claw_reach(cfg.P["arm_h90"]) < geo.claw_reach(cfg.P["arm_h0"])
 
 
 def test_cm_per_deg_from_sprocket():
@@ -108,9 +100,6 @@ def test_reference_point_shift():
     assert geo.card_to_center(100, 100) == pytest.approx(7)
     assert geo.rear_len() == pytest.approx(11)
     assert geo.track_w() == pytest.approx(14)
-    before = geo.claw_reach(cfg.P["h_carry"])
-    cfg.P["ref_rot_fwd"] = 0
-    assert geo.claw_reach(cfg.P["h_carry"]) == pytest.approx(before + 5)
 
 
 def test_front_len_is_claw_or_track():
@@ -363,7 +352,8 @@ def test_bump_clamps_and_rounds():
     assert settings.bump(spec, 1) == 0.5
     cfg.P["kp"] = 2.99
     assert settings.bump(spec, 1) == 3
-    assert settings.bump(("Brazo", "arm_dir", 2, -1, 1), 1) == 1
+    h0 = cfg.P["arm_h0"]
+    assert settings.bump(("Brazo", "arm_h0", 0.5, 0, 40), 1) == h0 + 0.5
 
 
 def test_save_and_load_roundtrip():

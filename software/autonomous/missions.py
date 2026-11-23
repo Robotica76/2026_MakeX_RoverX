@@ -60,8 +60,8 @@
 # seguir la línea no funcionaba). Cada tramo es "avanza X cm sosteniendo el rumbo Y" con el IMU,
 # referido a cómo se coloca el robot en la zona roja (mirando al sur, sobre la línea vertical).
 # TODO(medir en pista): las distancias salen del plano (simulation/arena.py).
-L1_SOUTH_CM = 36.0          # de la zona roja al cruce de la línea inferior
-L1_EAST_CM = 61.2           # del cruce hasta tener las sondas sobre el cruce frente al cubo
+L1_SOUTH_CM = 33.8          # de la zona roja al cruce de la línea inferior
+L1_EAST_CM = 59.0           # del cruce hasta tener las sondas sobre el cruce frente al cubo
 L1_CROSS_SLACK = 6.0        # cada tramo se queda corto esto y termina buscando el cruce
 L1_NORTH_CM = 18.4          # del cruce frente al cubo a la altura de la línea que sube a la rampa
 L1_TO_RAMP_CM = 18.7        # de ahí al pie de la rampa gris
@@ -103,7 +103,7 @@ CORRIDOR = [
     # del muro de arriba lo hacía chocar
     ("line", ("cm", 10), "v_turn_min", 8),
 ]
-L3_IN_CM = 17.0             # nivel 3: de la orilla de la zona azul a quedar completamente dentro
+L3_IN_CM = 19.2             # nivel 3: de la orilla de la zona azul a quedar completamente dentro
 # Nivel 3 POR MANIOBRA (estrategia del equipo: los puntos son por dejar el prisma en la zona
 # punteada, no por seguir la línea). Rumbos de mapa (0 este, 90 sur, 180 oeste, -90 norte) y
 # distancias fijas desde la orilla de la zona azul. TODO(medir en pista): salen del plano.
@@ -131,7 +131,12 @@ PRISM_MANEUVER = [
 ]
 # De ahí a la escalera: cruzar la línea de la escalera de forma perpendicular (referencia lateral:
 # cada oruga debe ir sobre su tramo) y girar al oeste.
+STAIRS_BACK_CM = 5.0         # TODO(pista) retroceso antes de buscar la línea frente a la escalera
 TO_STAIRS = [
+    # las sondas van 5.2 cm delante del centro: al girar al norte en el punto ya quedan sobre la
+    # línea o pasadas; se retrocede para que la busquen hacia adelante (la cola queda lejos de la
+    # pelota)
+    ("head", -90), ("straight", -STAIRS_BACK_CM, "v_slow"),
     ("cross", "v_slow", 15, -90), ("center",),
     ("head", 180),
     # los ~15 cm de línea recta hasta la escalera: el seguidor corrige el desvío lateral y el
@@ -153,7 +158,7 @@ BALL_STEPS = [("line", ("color", "red"), "v_slow", 20), ("center",),
               ("head", BALL_HEAD), ("arm", "h_pedestal"), ("claw", "claw_open"),
               ("approach_obj", "h_pedestal", "ball_ped_dist"), ("claw", "claw_ball"),
               ("arm", "h_carry"), ("retreat",), ("hold",), ("head", LINE_HEAD_AT_MARK2)]
-STAIRS_TOP_CM = 5.5         # nivel 4: avance desde que las sondas ven la zona verde (TODO pista)
+STAIRS_TOP_CM = 8.0         # nivel 4: avance desde que las sondas ven la zona verde (TODO pista)
 # Nivel 4: rodear la torre por el sur (al norte está la barra). Se vuelve a la línea con espacio
 # para girar sin barrer la torre (~13 cm de radio) y entre dos tarjetas (lo mostró el simulador).
 TOWER_DETOUR = [
@@ -179,7 +184,9 @@ MISSIONS = [
     # ------------------------------------------------------------ NIVEL 1 (zona roja)
     {"id": 1, "level": 1, "pts": 50, "name": "Seguir linea", "critical": True,
      # termina en el cruce frente al cubo (es lo que pide la misión 1)
-     "steps": [("arm", "h_pedestal"), ("claw", "claw_open"),
+     # brazo arriba (garra sobre la nariz) mientras gira: con el brazo bajo y al frente la garra
+     # barre ~21 cm de radio y tocaba la barra de pelotas
+     "steps": [("arm", "h_top"), ("claw", "claw_open"),
                ("ref", 90),                                   # colocado mirando al sur
                # cada tramo termina en una línea que cruza el camino: el error se reinicia ahí
                ("drive", 90, L1_SOUTH_CM - L1_CROSS_SLACK, "v_line"),
@@ -187,7 +194,9 @@ MISSIONS = [
                ("drive", 0, L1_EAST_CM - L1_CROSS_SLACK, "v_line"),
                ("cross", "v_slow", 2 * L1_CROSS_SLACK, 0)]},
     {"id": 2, "level": 1, "pts": 50, "name": "Tomar cubo", "critical": False,
-     "steps": [("approach_ped", "h_pedestal", "ped1_from_cross"), ("claw", "claw_cube"),
+     # primero se coloca (con el brazo arriba) y luego baja la garra abierta sobre el cubo
+     "steps": [("approach_ped", "h_pedestal", "ped1_from_cross"), ("arm", "h_pedestal"),
+               ("claw", "claw_cube"),
                ("arm", "h_carry"), ("retreat",), ("hold",)]},
     {"id": 3, "level": 1, "pts": 50, "name": "Subir nivel 2", "critical": True,
      # El pedestal está a 8 cm del cruce y el robot barre ~13 cm al girar, así que no puede
@@ -245,7 +254,7 @@ MISSIONS = [
      "steps": [("if_skipped", 7, L3_RETRY_TO_STAIRS),
                ("if_ran", 7, [("goto", L3_STAIRS_POINT[0], L3_STAIRS_POINT[1])])] + TO_STAIRS +
               [("arm", "h_climb"),
-                           ("crest", STAIRS_TOP_CM, 180, "green", "h_carry")]},
+                           ("crest", STAIRS_TOP_CM, 180, "green", "h_top")]},
 
     # ------------------------------------------------------------ NIVEL 4 (zona verde)
     {"id": 10, "level": 4, "pts": 100, "name": "Evitar torre", "critical": True,

@@ -1,7 +1,7 @@
 # Rover X 2026: garra (servo de cierre) + brazo de paralelogramo (servo de altura).
 #
 # El brazo se manda por ALTURA en cm (geometry.arm_servo convierte a ángulo del servo), así
-# que al cambiar el brazo solo se miden de nuevo arm_pivot_h, arm_len y arm_zero.
+# que al cambiar el brazo solo se mide de nuevo la tabla arm_h*/arm_x* (config.py).
 
 import hal
 import config as cfg
