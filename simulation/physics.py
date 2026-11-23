@@ -87,6 +87,10 @@ class Sim:
         self.spot = 0.35                                               # radio de lectura de una sonda (cm)
 
         x, y, yaw = arena.start_pose(level)
+        if level == 2:      # igual que place(): el equipo pone las SONDAS sobre la T
+            back = (self.body["sensor_fwd"] - self.body["ref_rot_fwd"]) - 3.0
+            x -= back * math.cos(math.radians(yaw))
+            y -= back * math.sin(math.radians(yaw))
         self.x, self.y, self.yaw = x, y, yaw
         self.vl = self.vr = 0.0
         self.z = arena.height(x, y)
@@ -476,6 +480,26 @@ class Sim:
         zc = a.height(x, y)
         if zc is not None and zc - self.z > 3.0:
             hit.add("borde de nivel")
+        # el CONTORNO contra la cara de un nivel más alto o la orilla de la arena (antes solo se
+        # revisaba el centro: la nariz o una esquina se metían en la pared del nivel 4 al girar)
+        # (se REGISTRAN como choque pero no frenan al robot: en el nivel 4 el rodeo de la torre
+        # todavía roza la orilla y frenarlo ahí cambiaría el resto de la corrida)
+        scrape = set()
+        if zc is not None:
+            c, s_ = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
+            slope = math.tan(math.radians(self.pitch))
+            for qx, qy in self._outline(fp):
+                zq = a.height(qx, qy)
+                if zq is None:
+                    scrape.add("orilla de la arena")
+                    continue
+                # altura esperada en ese punto si el piso siguiera el plano del robot (rampas)
+                f = (qx - x) * c + (qy - y) * s_
+                if (zq - zc > 3.0 and zq - (zc + slope * f) > 3.0
+                        and isinstance(a.surface(qx, qy), int)):
+                    scrape.add("pared del nivel %d" % a.surface(qx, qy))
+        blocked = bool(hit)
+        hit |= scrape
         for name in hit - self.contacts:
             if self.world.t - self._hit_logged.get(name, -9) > 1.0:
                 if name == "muro" and self.program_step == "square":
@@ -485,7 +509,18 @@ class Sim:
                     self.collisions[name] = self.collisions.get(name, 0) + 1
             self._hit_logged[name] = self.world.t
         self.contacts = hit
-        return bool(hit)
+        return blocked
+
+    @staticmethod
+    def _outline(fp, n=4):
+        """Puntos del contorno del robot: esquinas y n - 1 puntos intermedios por lado."""
+        pts = []
+        for i in range(len(fp)):
+            (ax, ay), (bx, by) = fp[i], fp[(i + 1) % len(fp)]
+            for k in range(n):
+                f = k / float(n)
+                pts.append((ax + (bx - ax) * f, ay + (by - ay) * f))
+        return pts
 
     def _local(self, x, y):
         """Punto de la pista -> (adelante, izquierda) respecto al centro de giro."""

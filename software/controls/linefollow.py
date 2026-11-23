@@ -25,6 +25,7 @@ _armed = True
 last_junction = None     # (tipo, odometría absoluta del inicio del cruce)
 last_edge = None         # odometría absoluta al salir de una zona de color (leave_color)
 _after_turn = False      # tras girar en un cruce, el siguiente seguimiento empieza desarmado
+bias_cm = 0.0            # ir corrido de la línea: + = la línea queda a la DERECHA del robot (cm)
 
 
 def reset():
@@ -51,6 +52,9 @@ def correction(err, last_err, integral):
 
 def drive_with(err, speed):
     global _last_err, _integral
+    if bias_cm:
+        po = cfg.P["probe_pitch"] / 2.0 + cfg.P.get("probe_outer", cfg.P["probe_pitch"])
+        err -= bias_cm / po * 100.0
     _integral = hal.clamp(_integral + err, -200, 200)
     c = correction(err, _last_err, _integral)
     _last_err = err

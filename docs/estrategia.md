@@ -111,3 +111,34 @@ Pendiente (medir en pista o decidir):
 4. **Volcadura en la escalera**: margen mínimo 1.7 cm (brazo bajo al frente al subir).
 5. **Giroscopio** (`gyro_scale`) y tabla del brazo: calibrar (`calibrations`).
 6. Pelota (misiones 8 y 12, 250 pts) omitida por decisión del equipo.
+
+## Choques en los niveles 1 y 2 (23 nov): holguras con el contorno real
+
+La pista es muy justa para el robot medido (21.35 × 20.3 cm). Girando en el lugar, la nariz barre
+16 cm de radio y la cola 13.6. El simulador ahora revisa el **contorno** del robot, no solo el centro,
+contra las caras de los niveles más altos y la orilla de la arena. Así salieron choques que antes no contaba.
+
+| Dónde | Qué pasaba | Cambio |
+| --- | --- | --- |
+| Retrocesos (todos) | `motion._hold` invertía la corrección del giroscopio al ir hacia atrás: el rumbo se iba en vez de corregirse | corrección igual hacia adelante y atrás |
+| Nivel 1, cruce inferior | al girar sobre el cruce la nariz entraba 3 cm en la pared del nivel 4 | baja 2.8 cm a la derecha de la línea, gira al ver el cruce (retrocede 1.5) y vuelve a la altura del cubo yendo al este |
+| Nivel 1, junto al cubo | ningún giro de más de 10° cabe entre el pedestal y la pared del nivel 4 | retrocede 11 cm y **pivotea** al norte sobre la oruga izquierda |
+| Nivel 2, pedestal | la nariz quedaba a 0.3 cm del pedestal | `L2_TO_PED_CM` 9.6 → 8.8 |
+| Nivel 2, curva amarilla | la diagonal de la línea baja hasta 12.7 cm de la pared del nivel 3 y la esquina la tocaba | desde la T, por odometría: baja, gira al este en y 43.5 y entra por el centro de la abertura |
+| Salida de la zona de obstáculos | un giro en el lugar con una oruga sobre un recorte corría el robot hasta 6 cm (la abertura deja 4 por lado) y chocaba con la punta del muro | después de escuadrar: pivote hacia atrás sobre la oruga izquierda, "S" de dos pivotes de 53° hasta el centro de la abertura, x fija al ver la diagonal y gira ya afuera |
+| Dentro de la zona de obstáculos | con las dos orugas sobre recortes la odometría se quedaba hasta 15 cm corta en x y el pivote barría el muro izquierdo | escuadra primero contra el muro derecho (x exacta), retrocede a x 188 y luego escuadra contra el de arriba |
+| Rampa blanca | la rampa deja 0.78 cm por lado; el seguidor oscilaba ±4.5° y una oruga salía 1.3 cm por la orilla | se alinea al pie, mide la x con la línea (`fix_line`), se centra en plano y sube por el centro con giroscopio + odometría (sin seguir la línea) |
+
+**Por qué pivotes:** en un pivote la oruga quieta no puede patinar. El centro gira alrededor de ella y
+la posición final depende solo del ángulo del giroscopio. En un giro en el lugar, en cambio, una
+oruga que patina desplaza el robot sin que los encoders lo vean.
+
+**TODO(pista):** medir y ajustar estas constantes de `missions.py`:
+- `L1_START`, `L1_CROSS_CY`
+- `T2_PLACED`, `T2_FROM_M4`
+- `CORRIDOR_DIAG_X`, `RAMP2_X`, `RAMP2_LINE_X`
+- `skid` en `config.py`: define el radio del pivote, 11.9 cm
+
+**Pendiente, nivel 4:** el rodeo de la torre todavía roza la orilla de la arena. Entre la torre y la
+orilla hay 25.5 cm, y al girar al oeste la nariz sale unos 5 cm. Hay que rediseñarlo.
+El simulador lo marca como choque ("orilla de la arena") pero sin frenar al robot.

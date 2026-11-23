@@ -42,6 +42,44 @@ def turn(deg, timeout=None):
     return False
 
 
+def pivot(deg, speed=None, timeout=None):
+    """Giro relativo sobre UNA oruga (la otra detenida); positivo = derecha. Avanza la oruga de
+    afuera: la de la derecha queda quieta al girar a la derecha. Si la oruga que se mueve patina
+    (recortes del pasillo) el robot solo gira más lento: el centro del giro es la oruga quieta y
+    la posición final depende solo del ángulo (en un giro en el lugar una oruga que patina corre
+    el robot hasta 6 cm sin que la odometría lo vea). speed < 0 = pivote hacia atrás."""
+    if timeout is None:
+        timeout = cfg.TURN_TIMEOUT_S * 2
+    if speed is None:
+        speed = cfg.P["v_turn_max"]
+    target = hal.heading() + deg
+    t0 = hal.now()
+    settled = None
+    while hal.now() - t0 < timeout:
+        if hal.abort_requested():
+            break
+        err = target - hal.heading()
+        if abs(err) <= cfg.P["turn_tol"]:
+            hal.stop()
+            if settled is None:
+                settled = hal.now()
+            elif hal.now() - settled >= cfg.TURN_SETTLE_S:
+                return True
+        else:
+            settled = None
+            p = hal.clamp(abs(cfg.P["turn_kp"] * err) * 2, cfg.P["v_turn_min"] * 1.5, abs(speed))
+            # el giro sale de la diferencia izquierda - derecha (> 0 = a la derecha):
+            # a la derecha hacia adelante mueve la izquierda, hacia atrás la derecha
+            fwd = speed > 0
+            if err > 0:
+                hal.drive(p, 0) if fwd else hal.drive(0, -p)
+            else:
+                hal.drive(0, p) if fwd else hal.drive(-p, 0)
+        hal.wait(cfg.LOOP_DT)
+    hal.stop()
+    return False
+
+
 def wrap180(deg):
     while deg > 180:
         deg -= 360
@@ -56,9 +94,10 @@ def turn_to(heading, timeout=None):
 
 
 def _hold(speed, target):
+    # el giro sale de la DIFERENCIA entre orugas (izquierda > derecha = a la derecha), igual
+    # hacia adelante que hacia atrás. Antes se invertía la corrección al retroceder y el rumbo se
+    # iba en vez de corregirse (en un retroceso largo sobre un recorte el robot daba vueltas).
     corr = cfg.P["head_kp"] * (target - hal.heading())
-    if speed < 0:
-        corr = -corr
     hal.drive(speed + corr, speed - corr)
 
 

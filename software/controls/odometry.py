@@ -59,7 +59,13 @@ def update():
     dpsi = -dh * math.pi / 180.0                 # giro antihorario real (rad)
     B = geo.track_w() * cfg.P["skid"]
     resid = dpsi - (b - a) / B
-    if abs(b - a) > abs(a + b) or abs(resid) < cfg.P["slip_tol"] * math.pi / 180.0:
+    if abs(b) < 0.15 * abs(a) and abs(a) > 1e-6:
+        # pivote sobre la oruga derecha (quieta: no puede patinar): el centro gira alrededor
+        # de ella aunque la izquierda patine
+        ds = b - dpsi * B / 2.0
+    elif abs(a) < 0.15 * abs(b):
+        ds = a + dpsi * B / 2.0                  # pivote sobre la izquierda
+    elif abs(b - a) > abs(a + b) or abs(resid) < cfg.P["slip_tol"] * math.pi / 180.0:
         # giro en el lugar (o sin patinaje): el promedio. Al girar, el derrape de las orugas
         # nunca coincide exacto con el giroscopio y la fórmula de patinaje inventaba avance.
         ds = (a + b) / 2.0
@@ -128,10 +134,13 @@ def goto(x, y, speed=None, tol=1.0, timeout=None):
     return False
 
 
-def track(x0, y0, hdg, speed=None, timeout=5.0, max_cm=None, stop=None):
+def track(x0, y0, hdg, speed=None, timeout=5.0, max_cm=None, stop=None, max_deg=None, halt=True):
     """Sigue la recta del mapa que pasa por (x0, y0) con rumbo `hdg`, corrigiendo el rumbo Y el
     desvío lateral (si el patinaje lo empuja de lado, regresa a la recta). Termina cuando stop()
-    es verdadero, al recorrer max_cm o al acabarse el tiempo. Devuelve True si fue por stop()."""
+    es verdadero, al recorrer max_cm o al acabarse el tiempo. Devuelve True si fue por stop().
+    max_deg: ángulo máximo contra la recta al corregir el desvío (por omisión track_max).
+    halt=False: al cumplirse stop() no frena (para encadenar otro tramo sin parar en una rampa).
+    speed < 0: hacia atrás por la misma recta (rumbo hdg = hacia donde mira el robot)."""
     if speed is None:
         speed = cfg.P["v_slow"]
     update()
@@ -145,13 +154,19 @@ def track(x0, y0, hdg, speed=None, timeout=5.0, max_cm=None, stop=None):
             break
         update()
         if stop is not None and stop():
-            hal.stop()
+            if halt:
+                hal.stop()
             return True
-        if max_cm is not None and (_x - sx) * ux + (_y - sy) * uy >= max_cm:
+        along = (_x - sx) * ux + (_y - sy) * uy
+        if speed < 0:
+            along = -along
+        if max_cm is not None and along >= max_cm:
             break
         cross = ux * (_y - y0) - uy * (_x - x0)       # + = a la derecha de la recta
-        lim = cfg.P.get("track_max", 30)
-        want = hdg - hal.clamp(cfg.P["track_k"] * cross, -lim, lim)
+        lim = cfg.P.get("track_max", 30) if max_deg is None else max_deg
+        # hacia atrás la corrección se invierte: para volver a la recta la cola apunta hacia ella
+        k = -1 if speed < 0 else 1
+        want = hdg - k * hal.clamp(cfg.P["track_k"] * cross, -lim, lim)
         err = wrap(want - heading())
         corr = cfg.P["head_kp"] * err
         hal.drive(speed + corr, speed - corr)

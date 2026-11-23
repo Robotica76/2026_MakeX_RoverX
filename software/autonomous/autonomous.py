@@ -241,6 +241,10 @@ def to_tower():
     return lf.follow_until(lf.after_cm(adv), cfg.P["v_slow"], 8)
 
 
+RAMP_FLAT_DEG = 6.0     # al pie, en plano: corregir el desvío lateral antes de subir
+RAMP_MAX_DEG = 1.5      # en la rampa angosta solo sostener: torcerse 3° saca una esquina 0.5 cm
+
+
 def map_target(deg):
     """Rumbo de mapa -> valor de hal.heading() al que hay que llegar por el camino corto.
     hal.heading() acumula vueltas; sin normalizar, una recta podía "sostener" un rumbo a 360°
@@ -295,10 +299,20 @@ def run_step(step):
         # hasta apoyar las orugas en un muro (rumbo perpendicular a él) y fijar esa coordenada de
         # la odometría ("x" o "y") y el rumbo. Por tiempo y no por distancia: con patinaje los
         # encoders cuentan de más y el robot se quedaba antes del muro (lo mostró el simulador).
-        speed = val(step[5]) if len(step) > 5 else cfg.P["v_slow"]
+        # 7o elemento opcional: valor de la OTRA coordenada de la recta a seguir (si no, la actual)
+        speed = val(step[5]) if len(step) > 5 and step[5] is not None else cfg.P["v_slow"]
         motion.turn_to(map_target(step[1]))
         x, y, _ = odo.pose()
+        if len(step) > 6:
+            if step[3] == "x":
+                y = step[6]
+            else:
+                x = step[6]
         odo.track(x, y, step[1], speed, timeout=val(step[2]))   # sostiene rumbo y línea recta
+        # parar AQUÍ y esperar: si el paso siguiente empieza con los motores todavía empujando,
+        # el robot sigue apretado contra el muro mientras ya gira
+        hal.stop()
+        hal.wait(0.3)
         x, y, _ = odo.pose()
         if step[3] == "x":
             x = step[4]
@@ -308,7 +322,7 @@ def run_step(step):
         heading_ref = step[1] - hal.heading()
         return True
     if kind == "track_line":
-        # ("track_line", rumbo, coord, valor, max_cm[, vel]): seguir la recta del mapa coord=valor
+        # ("track_line", rumbo, coord, valor, max_cm[, vel[, max_deg]]): seguir la recta del mapa coord=valor
         # (p. ej. "y", 18.0 con rumbo 0 = hacia el este a esa altura) hasta que las sondas
         # centrales vean una línea. Absorbe el error a lo largo y corrige el lateral.
         speed = val(step[5]) if len(step) > 5 else cfg.P["v_slow"]
@@ -319,7 +333,108 @@ def run_step(step):
         else:
             y = step[3]
         return odo.track(x, y, step[1], speed, timeout=2.0 + val(step[4]) / 5.0,
-                         max_cm=val(step[4]), stop=motion.on_line)
+                         max_cm=val(step[4]), stop=motion.on_line,
+                         max_deg=step[6] if len(step) > 6 else None)
+    if kind == "track":
+        # ("track", rumbo, coord, valor, cm[, vel]): como track_line pero sin parar en líneas
+        speed = val(step[5]) if len(step) > 5 else cfg.P["v_slow"]
+        motion.turn_to(map_target(step[1]))
+        x, y, _ = odo.pose()
+        if step[2] == "x":
+            x = step[3]
+        else:
+            y = step[3]
+        odo.track(x, y, step[1], speed, timeout=2.0 + val(step[4]) / 4.0, max_cm=val(step[4]))
+        return True
+    if kind == "back_to":
+        # ("back_to", coord, valor[, vel[, rumbo, otra]]): retroceder hasta que la odometría
+        # (encoders + giroscopio, corrige el patinaje de una oruga) llegue a esa coordenada. Con
+        # rumbo y otra: por la recta del mapa otra (la otra coordenada) mirando a ese rumbo,
+        # corrigiendo el desvío lateral (al retroceder sobre recortes el robot se corría 4 cm)
+        speed = val(step[3]) if len(step) > 3 and step[3] is not None else cfg.P["v_slow"]
+        i = 0 if step[1] == "x" else 1
+        start = odo.pose()[i]
+        goal = step[2]
+        up = goal > start
+
+        def there():
+            v = odo.pose()[i]
+            return v >= goal if up else v <= goal
+        tmo = 2.0 + abs(goal - start) / 4.0
+        if len(step) > 5:
+            x, y, _ = odo.pose()
+            if step[1] == "x":
+                y = step[5]
+            else:
+                x = step[5]
+            return odo.track(x, y, step[4], -abs(speed), timeout=tmo, stop=there)
+        return motion.straight_until(there, -abs(speed), timeout=tmo)
+    if kind == "ramp_up":
+        # ("ramp_up", rumbo, x, color, extra_cm, vel, max_cm): subir una rampa angosta por la recta
+        # del mapa x (giroscopio + odometría, sin seguir la línea: el seguidor oscilaba ±4.5° y una
+        # oruga salía por la orilla) hasta ver ese color y luego extra_cm más, SIN detenerse
+        hdg, x0, color, extra, speed, max_cm = step[1:7]
+        speed = val(speed)
+        _, y, _ = odo.pose()
+        # en plano (antes de inclinarse) todavía se puede corregir el desvío lateral
+        odo.track(x0, y, hdg, speed, timeout=4.0, max_cm=12, max_deg=RAMP_FLAT_DEG, halt=False,
+                  stop=lambda: abs(hal.pitch()) > 4)
+        _, y, _ = odo.pose()
+        seen = odo.track(x0, y, hdg, speed, timeout=4.0 + val(max_cm) / 3.0, max_cm=val(max_cm),
+                         stop=lambda: motion.sees_color(color), halt=False, max_deg=RAMP_MAX_DEG)
+        if not seen:
+            hal.stop()
+            return False
+        _, y, _ = odo.pose()
+        odo.track(x0, y, hdg, speed, timeout=2.0 + val(extra) / 3.0, max_cm=val(extra),
+                  max_deg=RAMP_MAX_DEG)
+        return True
+    if kind == "fix_line":
+        # ("fix_line", coord, valor, signo): parado sobre una línea recta que está en coord=valor,
+        # la desviación medida por las sondas da esa coordenada exacta. signo +1 si la izquierda
+        # del robot es hacia +coord (p. ej. mirando al sur y la línea en x)
+        po = cfg.P["probe_pitch"] / 2.0 + cfg.P.get("probe_outer", cfg.P["probe_pitch"])
+        acc = 0.0
+        n = 0
+        for _ in range(5):
+            err, bits = hal.line_read()
+            if bits["L1"] or bits["R1"]:
+                acc += err
+                n += 1
+            hal.wait(cfg.LOOP_DT)
+        if n < 3:
+            return True                       # no la ve: se queda la odometría
+        err_cm = acc / n * po / 100.0         # err < 0: línea a la izquierda
+        x, y, h = odo.pose()
+        v = step[2] + step[3] * err_cm
+        if step[1] == "x":
+            x = v
+        else:
+            y = v
+        odo.set_pose(x, y, h)
+        return True
+    if kind == "bias":
+        # ("bias", cm): seguir la línea corrido; + = la línea a la derecha del robot. Para
+        # centrar el robot en una rampa cuya línea no va al centro
+        lf.bias_cm = step[1]
+        return True
+    if kind == "fix":
+        # ("fix", coord, valor): la odometría está en esa coordenada (p. ej. al ver una línea
+        # conocida); el resto de la pose se queda
+        x, y, h = odo.pose()
+        if step[1] == "x":
+            x = step[2]
+        else:
+            y = step[2]
+        odo.set_pose(x, y, h)
+        return True
+    if kind == "pivot":
+        # ("pivot", rumbo[, "back"]): girar al rumbo de mapa sobre UNA oruga (ver motion.pivot);
+        # "back" = la oruga que se mueve va hacia atrás
+        speed = cfg.P["v_turn_max"]
+        if "back" in step[2:]:
+            speed = -speed
+        return motion.pivot(motion.wrap180(map_target(step[1]) - hal.heading()), speed)
     if kind == "goto":
         # ("goto", x, y[, vel]): ir a ese punto del mapa con odometría encoders + giroscopio
         speed = val(step[3]) if len(step) > 3 else cfg.P["v_slow"]
