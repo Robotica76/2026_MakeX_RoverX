@@ -36,3 +36,12 @@ def straight(cm):
 
 def turn(deg):
     pass
+
+
+def EM_set_speed(rpm, port):
+    """rpm de un motor -> potencia del mundo falso (oruga de 4.18 cm, 46 cm/s al 100 %)."""
+    p = float(rpm) * 3.14159 * 4.18 / 60.0 / 46.0 * 100.0
+    if port == "EM1":
+        world.em = [p, world.em[1]]
+    else:
+        world.em = [world.em[0], p]
