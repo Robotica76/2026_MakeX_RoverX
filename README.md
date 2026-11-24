@@ -33,7 +33,7 @@ inicio con el siguiente nivel ya elegido.
 | [tools/robot/api_check.py](tools/robot/api_check.py) | Programa de prueba y calibración para el robot |
 | [tools/scripts/bundle_for_mblock.py](tools/scripts/bundle_for_mblock.py) | Junta todos los módulos en un solo archivo para mBlock |
 | [simulation](simulation/README.md) | Simulador del área automática: pista del reglamento, física, juez, Monte Carlo y reproducción HTML |
-| [Guia_Calibracion.pdf](docs/software_doc/Guia_Calibracion.pdf) | **Guía rápida de calibración** (una hoja para los alumnos): calibrar el robot, medidas de la pista y qué cambiar según el síntoma |
+| [Guia_Calibracion.pdf](docs/software_doc/Guia_Calibracion.pdf) | **Guía de calibración** (2 hojas para los alumnos): el robot y la pista dibujados con cada variable donde se mide, pasos de calibración y qué cambiar según el síntoma |
 | [docs/software_doc](docs/software_doc/README.md) | Capítulo **Software** en PDF, generado de los comentarios Doxygen del código ([`Software.pdf`](docs/software_doc/Software.pdf)) |
 | [tests](tests) | Pruebas en PC con `cyberpi` / `mbot2` / `mbuild` / `gamepad` falsos |
 | [docs](docs) | [Resumen del reglamento](docs/reglamento.md), [hoja de medidas del robot](docs/medidas_robot.md), [geometría y ajustes en pista](docs/geometria.md), [estrategia](docs/estrategia.md), [API del mBot2](docs/api_mbot2.md), [control manual](docs/control_manual.md) |

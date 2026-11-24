@@ -13,18 +13,26 @@ python3 docs/software_doc/generate_software_doc.py --sin-codigo --pdf   # sin li
 Hay que volver a correrlo después de cambiar el código: todo se regenera.
 Requiere `pdflatex` (MacTeX o TeX Live); en macOS lo busca también en `/Library/TeX/texbin`.
 
-## Guía rápida de calibración (una hoja)
+## Guía de calibración (2 hojas, para los alumnos)
 
-[`Guia_Calibracion.pdf`](Guia_Calibracion.pdf): hoja para los alumnos con 1) cómo calibrar el
-robot, 2) qué medidas de la pista hacen falta (lista sacada de `pista.py`, con casillas) y
-3) qué cambiar según lo que haga mal el robot.
+[`Guia_Calibracion.pdf`](Guia_Calibracion.pdf), pensada para imprimir por los dos lados:
+
+- **Hoja 1, el robot:** vista de arriba y de lado dibujadas a escala con las medidas de
+  `config.py`. Cada variable (`sensor_fwd`, `robot_w`, `arm_h0`, `claw_cube`...) está escrita sobre
+  la parte del robot que describe, con el número del paso de calibración que la ajusta. A la
+  derecha, los 10 pasos y la tabla "si pasa esto, cambia esto".
+- **Hoja 2, la pista:** la vista superior del reglamento con el recorrido del robot (una corrida
+  del simulador) y cada medida de `pista.py` marcada con un número donde se mide: punto, recta
+  x/y, distancia (flecha) o rumbo. Abajo, la lista numerada con el valor actual y una casilla
+  (sale marcada cuando la medida dice MEDIDO).
 
 ```bash
 python3 docs/software_doc/generate_guia_calibracion.py
 ```
 
-Los textos de las partes 1 y 3 están al inicio de ese script (`CALIBRAR`, `SINTOMAS`). El
-script falla si mencionan un parámetro que ya no existe o si la hoja ya no cabe en una página.
+Los textos y la ubicación de cada medida en el mapa están al inicio del script (`CALIBRAR`,
+`SINTOMAS`, `MAPA`). El script falla si mencionan un parámetro que ya no existe, si hay una
+medida nueva en `pista.py` sin lugar en `MAPA`, o si la guía pasa de 2 hojas.
 
 ## Qué contiene el capítulo Software
 
