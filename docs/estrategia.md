@@ -158,3 +158,33 @@ Se buscó la maniobra en el espacio (x, y, rumbo) del robot con giros en el luga
 orilla del nivel 4 (el plano sale de una imagen y unos centímetros cambian todo), y ver si la
 orilla tiene valla (un roce) o es un borde abierto (riesgo de caída). Si las medidas confirman el
 plano, las opciones son omitir M10–M13 (320 pts) o un robot más angosto en ese tramo.
+
+## Nivel 2: cruce en diagonal de la zona de obstáculos (sin muros)
+
+Estrategia del equipo: apoyarse en los muros alinea, pero en la práctica trae más problemas.
+Ahora el robot cruza la zona en **una sola diagonal**, sin tocar muros:
+
+1. `goto` a (134.2, 43.5), gira al este y avanza por y = 45 hasta x 150.5 (aún sin recortes).
+2. Pivotea sobre la oruga izquierda a rumbo −26° (noreste); el pivote no patina.
+3. Paso `diag`: sigue con odometría la recta que pasa por el centro de las dos aberturas
+   (2.3 cm a las puntas de los muros), a velocidad 14 y con `head_kp` 2.5, hasta que
+   **cualquier sonda vea la línea de salida** (y = 12). Ese punto es fijo, así que ahí la
+   odometría se corrige a (208.96, 17.82).
+4. Pivotea sobre la oruga derecha a rumbo 0 y sigue la ruta de antes hacia la rampa blanca.
+
+Por qué así (simulador):
+
+- Sobre los recortes el robot avanza **8 a 28 cm menos** de lo que miden los encoders: la
+  distancia no sirve para saber dónde va. Por eso la diagonal termina al ver la línea.
+- Solo con giroscopio el desvío lateral llegaba a ±4.4 cm. Siguiendo la recta con odometría,
+  a v_slow y `head_kp` 1.2, quedaba en ±3 cm (una oruga en un recorte frena el control). A
+  velocidad 14 y `head_kp` 2.5 queda en ≤ 1.4 cm.
+- **Sensibilidad al rumbo inicial:** con ±1° de error de colocación funciona siempre; con ±2°
+  falla 6 a 8 de 10 corridas. Al reiniciar en el nivel 2, colocar el robot sobre la T bien
+  alineado con la línea. El tramo de línea al sur de la T es demasiado corto para promediar el
+  rumbo (el robot todavía se está alineando: sale ~15° de error).
+
+Resultados (20 a 40 corridas con ruido): M5 al 100 % arrancando en el nivel 2, con la rampa
+actual y con rampas 20 % más empinadas (25.8°). En el flujo completo desde el nivel 1, con
+la colocación a mano en el nivel 2, M5 al 95–100 % (1 de 30 corridas con 2.4° de error de
+colocación chocó). TODO(pista): medir `CORRIDOR_DIAG_DET` y las aberturas reales.

@@ -46,7 +46,9 @@ VIEW_KEYS = ("track_len", "track_off", "nose_h", "nose_fwd", "contact_half", "tr
              "robot_w", "belt_w", "belt_t", "wheel_d", "track_c", "track_d", "nose_deg",
              "sensor_fwd", "ref_rot_fwd", "probe_pitch", "probe_outer", "claw_tip",
              "arm_pivot_fwd", "arm_pivot_h", "arm_lat", "arm_w", "claw_open_w",
-             "arm_h0", "arm_x0", "arm_h45", "arm_x45", "arm_h90", "arm_x90")
+             "arm_h0", "arm_x0", "arm_h45", "arm_x45", "arm_h90", "arm_x90",
+             "arm_ground", "arm_ground_dx", "arm_crank", "arm_rocker", "arm_coupler",
+             "arm_claw_u", "arm_claw_v", "claw_open", "claw_cube")
 
 
 def robot_view(P):
@@ -105,6 +107,7 @@ class Sim:
         self._hit_logged = {}
         self.program_step = ""          # paso del programa en curso (lo pone run_auto / live)
         self.collisions = {}            # choques NO intencionales por prop
+        self.min_held_clear = None      # menor holgura objeto en la garra - piso (cm)
         self.trac = [1.0, 1.0]          # tracción de cada oruga (1 = no patina)
         self._wall_hit = None
         # tracción de cada recorte del pasillo (cartón de 1 cm, suelto): 0.35..0.75
@@ -434,10 +437,36 @@ class Sim:
         return self.body["track_front"] + self._arm()[1]
 
     def claw_point(self):
-        """(x, y, z) del centro de la garra en la pista."""
-        x, y = self.to_world(self.claw_reach(), self.body.get("arm_lat", 0.0))
+        """(x, y, z) del centro de la garra en la pista. La tabla del brazo está en el marco del
+        robot: inclinado (rampa) la garra sube X·sen(pitch) y se acerca H·sen(pitch)."""
+        X = self.claw_reach()
         h, _ = self.arm_h()
-        return x, y, self.z + h
+        p = math.radians(self.pitch)
+        x, y = self.to_world(X * math.cos(p) - h * math.sin(p), self.body.get("arm_lat", 0.0))
+        return x, y, self.z + X * math.sin(p) + h * math.cos(p)
+
+    def held_clearance(self):
+        """Holgura (cm) entre la cara de abajo del objeto en la garra y el piso debajo (esquinas
+        y centro del cubo, inclinado con el robot), o None si no lleva nada."""
+        if not self.held:
+            return None
+        o = self.objects[self.held]
+        half = o["size"] / 2.0
+        p = math.radians(self.pitch)
+        c, s = math.cos(math.radians(self.yaw)), math.sin(math.radians(self.yaw))
+        worst = None
+        for df in (-half, 0.0, half):
+            for dl in (-half, 0.0, half):
+                # punto de la cara de abajo: df a lo largo del robot (inclinado), dl de lado
+                fx = df * math.cos(p) + half * math.sin(p)
+                zb = o["z"] + df * math.sin(p) - half * math.cos(p)
+                qx, qy = o["x"] + c * fx - s * dl, o["y"] + s * fx + c * dl
+                zf = self.arena.height(qx, qy)
+                if zf is None:
+                    continue
+                g = zb - zf
+                worst = g if worst is None or g < worst else worst
+        return worst
 
     def claw_poly(self, x=None, y=None, yaw=None):
         b = self.body
@@ -594,6 +623,15 @@ class Sim:
     def _carry(self):
         o = self.objects[self.held]
         o["x"], o["y"], o["z"] = self.claw_point()
+        g = self.held_clearance()
+        if g is not None:
+            self.min_held_clear = g if self.min_held_clear is None else min(self.min_held_clear, g)
+            if g < -0.2 and self.world.t - self._hit_logged.get("objeto-piso", -9) > 1.0:
+                name = "%s contra el piso" % self._name(self.held)
+                self.log.append((self.world.t, "choque: " + name))
+                self.collisions[name] = self.collisions.get(name, 0) + 1
+            if g < -0.2:
+                self._hit_logged["objeto-piso"] = self.world.t
 
     def update_gripper(self):
         """Llamar tras cada cambio de servo: toma o suelta objetos."""

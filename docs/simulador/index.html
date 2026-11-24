@@ -1,0 +1,1187 @@
+<!doctype html>
+<html lang="es">
+<head>
+
+<style>
+  #simload { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center;
+    justify-content: center; background: #1b2028; color: #eceef3; font: 15px sans-serif; }
+  #simload div { max-width: 460px; padding: 24px; text-align: center; }
+  #simload h1 { font-size: 20px; margin: 0 0 10px; }
+  #simload.err p { color: #ff8a80; }
+</style>
+<script>
+// Cargador de la versión web (se inserta en <head> de index.html por simulation/build_web.py).
+// 1. Activa el aislamiento de origen cruzado (service worker coi-sw.js, una recarga la primera vez).
+// 2. Arranca el worker de Python y espera los datos iniciales de la pista.
+// 3. Ejecuta los scripts de la página (marcados type="text/sim-deferred") con esos datos.
+// 4. Reemplaza las llamadas al servidor de live.py (/state, /btn, /pad, ...) por mensajes al worker.
+(function () {
+  const params = sessionStorage.getItem("simParams") || "level=1&seed=0&noise=0&mode=comp";
+  const overlay = () => document.getElementById("simload");
+  const say = (msg, err) => {
+    const o = overlay();
+    if (!o) return;
+    o.querySelector("p").textContent = msg;
+    if (err) o.classList.add("err");
+  };
+
+  if (!window.crossOriginIsolated) {
+    if (!("serviceWorker" in navigator)) {
+      addEventListener("DOMContentLoaded", () => say("Este navegador no puede correr el simulador (sin service workers). Usa Chrome, Edge o Firefox recientes.", true));
+      return;
+    }
+    if (sessionStorage.getItem("coiTried")) {
+      addEventListener("DOMContentLoaded", () => say("No se pudo activar el modo aislado del navegador. Recarga la página; si sigue igual, usa Chrome o Edge.", true));
+      sessionStorage.removeItem("coiTried");
+      return;
+    }
+    sessionStorage.setItem("coiTried", "1");
+    navigator.serviceWorker.register("coi-sw.js").then(() => navigator.serviceWorker.ready)
+      .then(() => location.reload());
+    return;
+  }
+  sessionStorage.removeItem("coiTried");
+
+  // ---------------------------------------------------------------- canal de órdenes
+  const sab = new SharedArrayBuffer(16 + (1 << 16));
+  const i32 = new Int32Array(sab, 0, 4), u8 = new Uint8Array(sab), N = sab.byteLength - 16;
+  const enc = new TextEncoder();
+  function send(obj) {
+    const b = enc.encode(JSON.stringify(obj) + "\n");
+    const w = Atomics.load(i32, 0);
+    for (let k = 0; k < b.length; k++) u8[16 + ((w + k) % N)] = b[k];
+    Atomics.store(i32, 0, w + b.length);
+    Atomics.add(i32, 2, 1);
+    Atomics.notify(i32, 2);
+  }
+
+  // ---------------------------------------------------------------- estado acumulado
+  const store = { frames: [], events: [], status: { state: "", t: 0, speed: 1, paused: false, restarts: 0, falls: 0, screen: ["", "", "", ""] }, judge: [], program: {} };
+  const json = (o) => Promise.resolve(new Response(JSON.stringify(o), { headers: { "Content-Type": "application/json" } }));
+  const realFetch = window.fetch.bind(window);
+  window.fetch = function (url, opts) {
+    if (typeof url !== "string" || !url.startsWith("/")) return realFetch(url, opts);
+    const u = new URL(url, location.href), q = u.searchParams, path = u.pathname.replace(/^.*\//, "");
+    if (path === "state") {
+      const f = +q.get("f") || 0, e = +q.get("e") || 0;
+      return json({ frames: store.frames.slice(f), events: store.events.slice(e), status: store.status, judge: store.judge, program: store.program });
+    }
+    if (path === "btn") send({ c: "btn", k: q.get("k") });
+    else if (path === "place") send({ c: "place" });
+    else if (path === "pause") send({ c: "pause" });
+    else if (path === "speed") send({ c: "speed", v: +q.get("v") || 1 });
+    else if (path === "pad") {
+      let st = {};
+      try { st = JSON.parse((opts && opts.body) || "{}"); } catch (err) { st = {}; }
+      send(Object.assign({ c: "pad" }, st));
+    } else if (path === "new") {
+      sessionStorage.setItem("simParams", u.search.slice(1));   // la página recarga y arranca así
+      return json({ reload: true });
+    } else if (path === "upload") {
+      return json({ error: "En la versión web todavía no se pueden subir programas. Usa simulation/live.py en tu computadora." });
+    }
+    return json({ ok: true });
+  };
+
+  // ---------------------------------------------------------------- worker de Python
+  const worker = new Worker("sim-worker.js");
+  const qp = Object.fromEntries(new URLSearchParams(params));
+  worker.postMessage({ type: "init", sab, params: JSON.stringify(qp) });
+  worker.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.type === "progress") say(m.msg);
+    else if (m.type === "error") say("Error al cargar el simulador: " + m.msg, true);
+    else if (m.type === "init") start(m.data);
+    else if (m.type === "snap") {
+      const s = m.s;
+      for (const f of s.frames) store.frames.push(f);
+      for (const ev of s.events) store.events.push(ev);
+      store.status = s.status; store.judge = s.judge; store.program = s.program;
+    }
+  };
+  worker.onerror = (e) => say("Error en el simulador: " + (e.message || e), true);
+
+  function start(data) {
+    window.__SIM_DATA__ = data;
+    const run = () => {
+      for (const old of document.querySelectorAll('script[type="text/sim-deferred"]')) {
+        const s = document.createElement("script");
+        s.textContent = old.textContent;
+        old.replaceWith(s);
+      }
+      const o = overlay();
+      if (o) o.remove();
+    };
+    if (document.readyState === "loading") addEventListener("DOMContentLoaded", run); else run();
+  }
+})();
+
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rover X · simulador</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #ffffff; --ink: #1d2330; --muted: #667085; --line: #d9dde3;
+    --ok: #1a7f37; --bad: #c62828; --accent: #2266cc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14171c; --panel: #1d2128; --ink: #e6e8eb; --muted: #9aa3ad; --line: #333a44;
+      --ok: #4ac26b; --bad: #ff6b6b; --accent: #6ea8ff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: baseline; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .meta { color: var(--muted); font-size: 13px; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 12px; padding: 0 16px 16px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  canvas { width: 100%; display: block; border-radius: 6px; background: #c8ccd2; touch-action: none; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+  .controls input[type=range] { flex: 1 1 200px; }
+  button, select { font: inherit; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line);
+                   background: var(--bg); color: var(--ink); cursor: pointer; }
+  .status { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-variant-numeric: tabular-nums; }
+  .status dt { color: var(--muted); }
+  .status dd { margin: 0; }
+  .led { display: inline-block; width: 14px; height: 14px; border-radius: 50%; vertical-align: -2px;
+         border: 1px solid var(--line); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 3px 4px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; }
+  td.ok { color: var(--ok); font-weight: 600; } td.bad { color: var(--bad); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  h2 { font-size: 14px; margin: 14px 0 6px; }
+  h2:first-child { margin-top: 0; }
+  #events { max-height: 260px; overflow: auto; font-size: 12px; font-variant-numeric: tabular-nums; }
+  #events div { padding: 2px 4px; border-radius: 4px; cursor: pointer; }
+  #events div:hover { background: var(--bg); }
+  #events div.past { color: var(--muted); }
+  #events .judge { color: var(--ok); } #events .fall { color: var(--bad); font-weight: 600; }
+  .notes { color: var(--bad); font-size: 13px; margin: 6px 0 0; padding-left: 18px; }
+  .legend { color: var(--muted); font-size: 12px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div id="simload"><div><h1>Rover X · simulador</h1><p>Preparando el navegador…</p><small>La primera vez descarga Python (~10 MB); después queda en caché.</small></div></div>
+<header>
+  <h1>Rover X · simulador del autónomo</h1>
+  <span class="meta" id="meta"></span>
+</header>
+<main>
+  <section class="card">
+    <div id="live" style="display:none;margin-bottom:10px">
+      <div class="controls" style="margin-top:0;align-items:stretch">
+        <div style="display:grid;grid-template-columns:repeat(3,38px);gap:3px" title="joystick del CyberPi">
+          <span></span><button data-k="up">↑</button><span></span>
+          <button data-k="left">←</button><button data-k="middle">●</button><button data-k="right">→</button>
+          <span></span><button data-k="down">↓</button><span></span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button data-k="b" style="font-weight:700">B · arrancar</button>
+          <button data-k="a">A · abortar / manual</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button id="lplace" style="font-weight:700">Colocar en la zona</button>
+          <button id="lpause">Pausa</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label>velocidad <select id="lspeed"><option>0.5</option><option selected>1</option><option>2</option><option>4</option><option>8</option></select></label>
+          <span>
+            <select id="nlevel"><option value="1">nivel 1</option><option value="2">nivel 2</option><option value="3">nivel 3</option><option value="4">nivel 4</option></select>
+            <input id="nseed" type="number" value="0" style="width:52px" title="semilla">
+            <select id="nnoise"><option value="0">sin ruido</option><option value="1">con ruido</option></select>
+            <select id="nmode" title="programa que corre el robot">
+              <option value="comp">competencia</option><option value="manual">solo manual</option>
+              <option value="user">programa subido</option>
+            </select>
+            <button id="lnew">Nueva corrida</button>
+          </span>
+          <span>
+            <input id="lfile" type="file" accept=".py,.mblock" style="max-width:190px">
+            <button id="lupload">Subir y correr</button>
+            <span id="lprog" class="legend"></span>
+          </span>
+        </div>
+      </div>
+      <div id="lcyber" style="margin-top:8px;font:13px ui-monospace,Menlo,monospace;background:#0e1116;color:#9fe7a4;border-radius:6px;padding:6px 10px;white-space:pre"></div>
+      <div id="lstate" class="legend"></div>
+      <details id="padbox" style="margin-top:8px">
+        <summary style="cursor:pointer;font-weight:700">Control Bluetooth de Makeblock (emulado) · parte manual</summary>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-top:6px">
+          <svg id="pad" viewBox="185 228 380 300" style="width:min(560px,100%);background:#1b2028;border-radius:10px;touch-action:none;user-select:none"></svg>
+          <div class="legend" style="max-width:330px;line-height:1.5">
+            <b>Ratón</b>: clic en los botones (se iluminan mientras se mantienen), arrastrar los
+            joysticks (regresan al centro al soltar), interruptor On/Off.<br>
+            <b>Teclado</b>: W/S joystick izq. ↕ · J/L joystick der. ↔ · I/K joystick der. ↕ ·
+            flechas = cruceta · Q/E = L1/L2 · U/O = R1/R2 · 1-4 = botones 1-4 ·
+            Mayús = joysticks a la mitad.<br>
+            <b>Control real</b> conectado a la PC (USB/Bluetooth): se usa solo (Gamepad API).<br>
+            En el programa de competencia: A en la pantalla de inicio = control manual.
+            <div id="padstate" style="margin-top:6px;font:12px ui-monospace,Menlo,monospace"></div>
+          </div>
+        </div>
+      </details>
+    </div>
+    <canvas id="cv" width="1200" height="620"></canvas>
+    <div class="controls">
+      <button id="play">▶ Reproducir</button>
+      <select id="speed">
+        <option value="1">1×</option><option value="2">2×</option><option value="4" selected>4×</option>
+        <option value="10">10×</option><option value="25">25×</option>
+      </select>
+      <input id="slider" type="range" min="0" max="0" value="0" step="1">
+      <span id="clock">0.0 s</span>
+      <label><input type="checkbox" id="follow"> seguir al robot</label>
+    </div>
+    <div class="legend">Vista superior. Gris más oscuro = nivel más alto. Rastro azul = recorrido.
+      Puntos al frente = sondas del Quad RGB. Garra: placa azul fija a la derecha y dedo que se cierra hacia ella; el rectángulo naranja es la zona de agarre (con su altura).</div>
+    <h2 style="margin-top:14px">Vista 3D</h2>
+    <div id="v3wrap" style="position:relative">
+      <div id="v3" style="width:100%;aspect-ratio:16/9;border-radius:6px;background:#1b2028"></div>
+      <div id="v3msg" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#cfd6df;font-size:14px">Cargando 3D…</div>
+    </div>
+    <div class="controls">
+      <label><input type="checkbox" id="v3follow" checked> cámara sigue al robot</label>
+      <button id="v3top">Vista general</button>
+      <button id="v3chase">Detrás del robot</button>
+    </div>
+    <div class="legend">Arrastrar = girar, rueda = acercar, clic derecho = mover. Usa three.js desde un
+      CDN (requiere internet); lo demás funciona sin conexión.</div>
+    <h2 style="margin-top:14px">Vista lateral (sigue al robot, escala real)</h2>
+    <canvas id="side" width="1200" height="500"></canvas>
+    <div class="legend">Perfil del piso bajo el recorrido: rampas, escalera y niveles a escala 1:1. El robot se
+      inclina con el pitch que lee el CyberPi; el brazo es un cuadrilátero articulado (verde = manivela del servo, rojo = balancín y acoplador que lleva la garra); el punto naranja es el centro de la garra a su altura. Abajo, la altura
+      del robot durante toda la corrida.</div>
+  </section>
+  <aside class="card">
+    <h2>Estado</h2>
+    <dl class="status">
+      <dt>Misión</dt><dd id="s_m">-</dd>
+      <dt>Tiempo</dt><dd id="s_t">-</dd>
+      <dt>Posición</dt><dd id="s_p">-</dd>
+      <dt>Altura / pitch</dt><dd id="s_z">-</dd>
+      <dt>Garra</dt><dd id="s_c">-</dd>
+      <dt>LEDs</dt><dd><span class="led" id="s_led"></span></dd>
+    </dl>
+    <h2>Juez vs. programa</h2>
+    <table id="results"><thead><tr><th>M</th><th>Misión</th><th>Programa</th><th>Juez</th><th class="num">Pts</th></tr></thead><tbody></tbody></table>
+    <ul class="notes" id="notes"></ul>
+    <h2>Eventos</h2>
+    <div id="events"></div>
+  </aside>
+</main>
+<script type="text/sim-deferred">
+const D = window.__SIM_DATA__;
+const A = D.arena, F = D.frames, R = D.robot;
+const cv = document.getElementById("cv"); let cx = cv.getContext("2d");
+const COL = { red: "#c62828", yellow: "#e8c400", green: "#128a3a", blue: "#1d8fc4", cyan: "#3cc8dc",
+              purple: "#8e44ad", navy: "#3c3c8c", magenta: "#d020c8", white: "#ffffff" };
+const ZCOL = { 3: COL.red, 4: COL.yellow, 5: COL.green, 6: COL.blue, 7: COL.navy };
+let i = 0, playing = false, last = 0, zoom = null;
+
+const p = D.params;
+document.getElementById("meta").textContent =
+  `nivel ${p.level} · semilla ${p.seed} · ruido ${p.noise} · línea ${p.line_w} cm · tarjetas: ${p.cards.join(", ")}`;
+
+// ------------------------------------------------------------ transformación cm -> canvas
+function view() {
+  if (document.getElementById("follow").checked && F.length) {
+    const f = F[i], w = 90, h = w * cv.height / cv.width;
+    return { x0: f[1] - w / 2, y0: f[2] - h / 2, w, h };
+  }
+  return { x0: -2, y0: -2, w: A.w + 4, h: A.h + 4 };
+}
+let V = view(), K = 1;
+let CH = 620;                       // alto del lienzo donde se dibuja (vista superior o textura 3D)
+function T(x, y) { return [(x - V.x0) * K, CH - (y - V.y0) * K]; }
+function rect(r, fill, stroke, lw) {
+  const [a, b] = T(r[0], r[3]), [c, d] = T(r[2], r[1]);
+  if (fill) { cx.fillStyle = fill; cx.fillRect(a, b, c - a, d - b); }
+  if (stroke) { cx.strokeStyle = stroke; cx.lineWidth = lw || 1; cx.strokeRect(a, b, c - a, d - b); }
+}
+function poly(pts, fill, stroke, lw) {
+  cx.beginPath();
+  pts.forEach((q, k) => { const [x, y] = T(q[0], q[1]); k ? cx.lineTo(x, y) : cx.moveTo(x, y); });
+  cx.closePath();
+  if (fill) { cx.fillStyle = fill; cx.fill(); }
+  if (stroke) { cx.strokeStyle = stroke; cx.lineWidth = lw || 1; cx.stroke(); }
+}
+function rpoly(x, y, yaw, len, wid, fwd, lat) {
+  const c = Math.cos(yaw * Math.PI / 180), s = Math.sin(yaw * Math.PI / 180);
+  fwd = fwd || 0; lat = lat || 0;
+  const ox = x + c * fwd - s * lat, oy = y + s * fwd + c * lat;
+  return [[len / 2, wid / 2], [-len / 2, wid / 2], [-len / 2, -wid / 2], [len / 2, -wid / 2]]
+    .map(([a, b]) => [ox + c * a - s * b, oy + s * a + c * b]);
+}
+
+// ---------------------------------------------------------------- modelo del robot (medidas reales)
+// Marco local: x adelante desde el centro de giro, y arriba desde el piso. Oruga de 3 ruedas:
+// blanca atrás, 1a negra adelante (tramo apoyado = track_c) y 2a negra levantada (nariz).
+function interp(tab, a) {
+  if (a <= tab[0][0]) return tab[0][1];
+  for (let k = 1; k < tab.length; k++)
+    if (a <= tab[k][0]) { const [a0, v0] = tab[k - 1], [a1, v1] = tab[k]; return v0 + (a - a0) / (a1 - a0) * (v1 - v0); }
+  return tab[tab.length - 1][1];
+}
+function wheelsOf(R) {
+  const r = (R.wheel_d || 3.95) / 2, t = R.belt_t || 0.4, ch = R.contact_half || R.track_len / 3;
+  const nx = R.nose_fwd || ch + 3.4, nh = R.nose_h || 3.4;
+  return { r, t, list: [[-ch, r + t, 0xf2f2f2], [ch, r + t, 0x1b1b1b], [nx, r + t + nh, 0x1b1b1b]] };
+}
+function hull(pts) {
+  pts = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [], up = [];
+  for (const q of pts) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+  for (const q of pts.slice().reverse()) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+function trackOutline(R, extra) {
+  const W = wheelsOf(R); let pts = [];
+  for (const [x, y] of W.list) for (let k = 0; k < 24; k++) {
+    const a = k / 24 * 2 * Math.PI; pts.push([x + (W.r + extra) * Math.cos(a), y + (W.r + extra) * Math.sin(a)]);
+  }
+  return hull(pts);
+}
+// Brazo = cuadrilátero articulado (fotos): mástil fijo O1 (eje de arriba) - O2 (eje del servo);
+// el servo gira la manivela O2-C; el balancín O1-B gira libre en O1; el acoplador C-B lleva la
+// garra atornillada, así que la garra se inclina al subir. Marco del acoplador: e = de C hacia B
+// ("arriba" de la garra), g = perpendicular hacia adelante.
+function linkFrame(R, th) {
+  const O1 = [R.arm_pivot_fwd - R.ref_rot_fwd, R.arm_pivot_h];
+  const O2 = [O1[0] + (R.arm_ground_dx || 0.7), O1[1] - (R.arm_ground || 5)];
+  const LC = R.arm_crank || 7.2, LR = R.arm_rocker || 5.75, LK = R.arm_coupler || 7;
+  const C = [O2[0] + LC * Math.cos(th), O2[1] + LC * Math.sin(th)];
+  const dx = C[0] - O1[0], dy = C[1] - O1[1], d = Math.hypot(dx, dy);
+  if (d > LR + LK || d < Math.abs(LR - LK)) return null;
+  const a = (LR * LR - LK * LK + d * d) / (2 * d), h = Math.sqrt(Math.max(0, LR * LR - a * a));
+  const ex = dx / d, ey = dy / d;
+  const B = [O1[0] + a * ex - h * ey, O1[1] + a * ey + h * ex];
+  const e = [(B[0] - C[0]) / LK, (B[1] - C[1]) / LK], g = [e[1], -e[0]];
+  const at = (pe, pg) => [C[0] + pe * e[0] + pg * g[0], C[1] + pe * e[1] + pg * g[1]];
+  return { O1, O2, C, B, e, g, at, K: at(R.arm_claw_u || 1.9, R.arm_claw_v || 7.9), th };
+}
+function armPose(R, servo, closed) {
+  // la física da la altura del centro de la garra (tabla del servo); se busca el ángulo de la
+  // manivela cuyo centro de garra queda a esa altura, cerca del ángulo nominal (servo - 22°)
+  const s = Math.max(0, Math.min(90, servo == null ? 45 : servo));
+  const hT = interp([[0, R.arm_h0], [45, R.arm_h45], [90, R.arm_h90]], s);
+  const nom = (s - 22) * Math.PI / 180;
+  let best = null;
+  for (let k = -120; k <= 120; k++) {
+    const L = linkFrame(R, nom + k * 0.25 * Math.PI / 180);
+    if (!L) continue;
+    const err = Math.abs(L.K[1] - hT) + 0.002 * Math.abs(k);
+    if (!best || err < best.err) best = Object.assign(L, { err });
+  }
+  const L = best || linkFrame(R, nom);
+  const tip = R.claw_tip || 3, ku = R.arm_claw_u || 1.9, kv = R.arm_claw_v || 7.9, aw = R.arm_w || 4.9;
+  // garra (vista superior + video): pinza LATERAL. Placa azul vertical fija en el lado derecho del
+  // marco (mordaza fija); a la izquierda del marco, el servo de la garra con eje a lo largo de e
+  // mueve un dedo (barra azul + almohadilla negra) que barre hacia la placa. Cajas en el marco
+  // (e arriba, g adelante, l = lateral + a la derecha, desde el centro del marco); phi gira la
+  // caja alrededor de e (+ = la punta hacia la derecha).
+  const P = [3.2, -aw / 2 - 1.3], LF = 6.5;                   // eje del dedo (g, l) y largo
+  const phi = (closed ? 8 : -25) * Math.PI / 180;
+  const along = (d) => [P[0] + d * Math.cos(phi), P[1] + d * Math.sin(phi)];
+  const fM = along(LF / 2 - 0.6), pad = along(LF - 1.2);
+  const boxes = [
+    { name: "bracket", e: ku - 0.6, g: 1.0, l: -0.5, sg: 2.4, se: 4.2, sl: aw + 1.0, col: 0x3d8fe6 },
+    { name: "plate", e: ku, g: (0.3 + kv + tip) / 2, l: aw / 2 - 0.2, sg: kv + tip - 0.3, se: 2.2, sl: 0.4, col: 0x3d8fe6 },
+    { name: "servo", e: ku, g: 2.3, l: -aw / 2 - 1.3, sg: 4.0, se: 2.4, sl: 2.0, col: 0x1b1b1b },
+    { name: "finger", e: ku, g: fM[0], l: fM[1], sg: LF - 1.2, se: 0.8, sl: 0.6, phi, col: 0x3d8fe6 },
+    { name: "pad", e: ku, g: pad[0], l: pad[1] + 0.35, sg: 2.6, se: 2.4, sl: 0.6, phi, col: 0x1d1d1d },
+  ];
+  // proyección de cada caja al plano lateral (e, g) y al plano del piso (g, l)
+  const gl = (bx) => { const c = Math.cos(bx.phi || 0), sn = Math.sin(bx.phi || 0);
+    return [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([a, b]) =>
+      [bx.g + a * bx.sg / 2 * c - b * bx.sl / 2 * sn, bx.l + a * bx.sg / 2 * sn + b * bx.sl / 2 * c]); };
+  for (const bx of boxes) {
+    const gs = gl(bx).map((q) => q[0]), g0 = Math.min(...gs), g1 = Math.max(...gs);
+    bx.side = [[bx.e - bx.se / 2, g0], [bx.e - bx.se / 2, g1], [bx.e + bx.se / 2, g1], [bx.e + bx.se / 2, g0]].map(([pe, pg]) => L.at(pe, pg));
+    bx.top = gl(bx);                       // (g, l) en el marco del acoplador, al nivel e
+  }
+  return Object.assign(L, { pitch: Math.atan2(L.g[1], L.g[0]), boxes, fingerAxis: L.at(ku, P[0]), fingerAxisL: P[1] });
+}
+function text(t, x, y, size, color, align) {
+  const [a, b] = T(x, y);
+  cx.fillStyle = color || "#333"; cx.font = `${size || 11}px sans-serif`;
+  cx.textAlign = align || "left"; cx.fillText(t, a, b);
+}
+
+// ------------------------------------------------------------ pista
+function drawArena() {
+  const shade = { 1: "#eceef0", 2: "#dfe2e6", 3: "#d2d6db", 4: "#c4c9cf" };
+  for (const k of ["1", "2", "3", "4"]) rect(A.levels[k], shade[k]);
+  // rampas: degradado del nivel bajo al alto, con flecha "sube"
+  const ramp = (r, x0, y0, x1, y1, c0, c1, label) => {
+    const [a, b] = T(x0, y0), [c, d] = T(x1, y1);
+    const g = cx.createLinearGradient(a, b, c, d);
+    g.addColorStop(0, c0); g.addColorStop(1, c1);
+    rect(r, g, "#666", 1);
+    cx.strokeStyle = "#333"; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(a, b); cx.lineTo(c, d); cx.stroke();
+    const ang = Math.atan2(d - b, c - a);
+    cx.beginPath(); cx.moveTo(c, d);
+    cx.lineTo(c - 10 * Math.cos(ang - 0.4), d - 10 * Math.sin(ang - 0.4));
+    cx.lineTo(c - 10 * Math.cos(ang + 0.4), d - 10 * Math.sin(ang + 0.4)); cx.closePath();
+    cx.fillStyle = "#333"; cx.fill();
+    text(label, (r[0] + r[2]) / 2, (r[1] + r[3]) / 2 + 3, 11, "#222", "center");
+  };
+  const r1 = A.ramps[0], r2 = A.ramps[1], st = A.stairs;
+  const deg = (dz, run) => Math.round(Math.atan2(dz, run) * 180 / Math.PI);
+  ramp(r1, r1[0] + 3, (r1[1] + r1[3]) / 2 - 8, r1[2] - 3, (r1[1] + r1[3]) / 2 - 8, "#d9dbde", "#8e939a",
+       `rampa ${deg(A.z["2"] - A.z["1"], r1[2] - r1[0])}°`);
+  ramp(r2, (r2[0] + r2[2]) / 2 + 9, r2[3] - 3, (r2[0] + r2[2]) / 2 + 9, r2[1] + 3, "#ffffff", "#c9ced6",
+       `rampa ${deg(A.z["3"] - A.z["2"], r2[3] - r2[1])}°`);
+  for (const k of ["1", "2", "3", "4"]) {
+    const r = A.levels[k];
+    text(`Nivel ${k} · ${A.z[k]} cm`, r[0] + 1.5, r[3] - 3.5, 12 * K / 4.6, "#6a7380");
+  }
+  text(`escalera ${deg(A.z["4"] - A.z["3"], st[2] - st[0])}° · sube ←`, (st[0] + st[2]) / 2, st[3] + 2, 11, "#222", "center");
+  // escalera: dos tramos con sus peldaños
+  for (const f of A.flights) {
+    rect(f, "#b9bfd8", "#555");
+    for (let s = 1; s < 8; s++) {
+      const x = f[0] + (f[2] - f[0]) * s / 8;
+      const [a, b] = T(x, f[1]), [c, d] = T(x, f[3]);
+      cx.strokeStyle = "#555"; cx.lineWidth = 1; cx.beginPath(); cx.moveTo(a, b); cx.lineTo(c, d); cx.stroke();
+    }
+  }
+  for (const z of A.zones) rect(z.rect, ZCOL[z.code]);
+  for (const g of A.green_marks) rect(g, COL.green);
+  for (const m of A.red_marks) poly(m, COL.red);
+  // líneas
+  cx.strokeStyle = "#111"; cx.lineWidth = A.line_w * K; cx.lineJoin = "round"; cx.lineCap = "butt";
+  for (const l of A.lines) {
+    cx.beginPath();
+    l.forEach((q, k) => { const [x, y] = T(q[0], q[1]); k ? cx.lineTo(x, y) : cx.moveTo(x, y); });
+    cx.stroke();
+  }
+  for (const c of A.cards) rect(c.rect, COL[c.color], "#222", 1);
+  cx.setLineDash([4, 3]); rect(A.dotted, null, "#333", 1.2); cx.setLineDash([]);
+  rect(A.m1_zone, null, "rgba(34,102,204,.5)", 1);
+  rect(A.tope, "rgba(120,120,120,.55)");
+  for (const o of A.obstacles) rect(o, "rgba(140,110,200,.45)", "rgba(90,60,150,.8)");
+  cx.lineCap = "round";
+  for (const w of A.walls) {
+    const [a, b] = T(w[0][0], w[0][1]), [c, d] = T(w[1][0], w[1][1]);
+    cx.strokeStyle = "#4a4f57"; cx.lineWidth = Math.max(2, 1.2 * K);
+    cx.beginPath(); cx.moveTo(a, b); cx.lineTo(c, d); cx.stroke();
+  }
+  for (const [name, pr] of Object.entries(A.props)) {
+    rect(pr.rect, name === "bar" ? COL.magenta : COL.magenta, "#5a0f55", 1);
+    const r = pr.rect;
+    text(name === "tower" ? "torre" : name === "bar" ? "barra" : "", (r[0] + r[2]) / 2, (r[1] + r[3]) / 2 - 1, 10, "#fff", "center");
+  }
+  for (const h of A.holes) {
+    const [a, b] = T(h[0], h[1]);
+    cx.fillStyle = "#fff"; cx.beginPath(); cx.arc(a, b, 1.25 * K, 0, 7); cx.fill();
+  }
+}
+
+// ------------------------------------------------------------ robot y objetos
+function drawFrame() {
+  const f = F[i];
+  // rastro
+  cx.lineWidth = Math.max(1, 0.5 * K); cx.lineCap = "round";
+  cx.strokeStyle = "rgba(34,102,204,.18)"; cx.beginPath();
+  F.forEach((q, k) => { const [x, y] = T(q[1], q[2]); k ? cx.lineTo(x, y) : cx.moveTo(x, y); });
+  cx.stroke();
+  cx.strokeStyle = "rgba(34,102,204,.85)"; cx.beginPath();
+  for (let k = 0; k <= i; k++) { const [x, y] = T(F[k][1], F[k][2]); k ? cx.lineTo(x, y) : cx.moveTo(x, y); }
+  cx.stroke();
+  // prisma
+  const pr = f[11];
+  const ph = 3.2;
+  poly(rpoly(pr[0], pr[1], 0, 2 * ph, 2 * ph), pr[2] ? "rgba(232,196,0,.35)" : COL.yellow, "#6b5a00", 1.5);
+  // robot
+  const [x, y, yaw] = [f[1], f[2], f[3]];
+  const tilt = Math.min(1, Math.abs(f[5]) / 30);
+  poly(rpoly(x, y, yaw, R.track_len, R.robot_w, R.track_off || 0),
+       `rgba(${Math.round(79 + 176 * tilt)},${Math.round(195 - 60 * tilt)},${Math.round(247 - 200 * tilt)},.8)`, "#0b4f6c", 1.5);
+  if (Math.abs(f[5]) > 2) text(`${f[5] > 0 ? "▲" : "▼"} ${Math.abs(f[5]).toFixed(0)}°`, x, y + R.robot_w / 2 + 2, 12, "#7a3b00", "center");
+  const off = (R.robot_w - R.belt_w) / 2;
+  for (const s of [-1, 1]) poly(rpoly(x, y, yaw, R.track_len, R.belt_w, R.track_off || 0, s * off), "#2a2f36");
+  // frente y centro de giro
+  const [ax, ay] = T(x, y);
+  cx.fillStyle = "#0b4f6c"; cx.beginPath(); cx.arc(ax, ay, Math.max(2, 0.6 * K), 0, 7); cx.fill();
+  // sondas
+  const c = Math.cos(yaw * Math.PI / 180), s = Math.sin(yaw * Math.PI / 180);
+  const sf = R.sensor_fwd - R.ref_rot_fwd;
+  for (let k = 0; k < 4; k++) {
+    const pi = R.probe_pitch / 2, po = R.probe_outer || R.probe_pitch;
+    const lat = -[-pi - po, -pi, pi, pi + po][k];
+    const [qx, qy] = T(x + c * sf - s * lat, y + s * sf + c * lat);
+    cx.fillStyle = "#ff3d00"; cx.beginPath(); cx.arc(qx, qy, Math.max(1.5, 0.35 * K), 0, 7); cx.fill();
+  }
+  // garra
+  const cl = f[13];
+  poly(rpoly(cl[0], cl[1], yaw, R.claw_tip + 2, 6), f[7] ? "rgba(255,140,0,.35)" : "rgba(255,140,0,.12)", "#b35c00", 1);
+  { // pinza vista desde arriba: placa fija (derecha), servo y dedo que barre (izquierda)
+    const AP = armPose(R, f[14], f[7]), c = Math.cos(yaw * Math.PI / 180), sn = Math.sin(yaw * Math.PI / 180);
+    const ku = R.arm_claw_u || 1.9;
+    const W = ([pg, pl]) => { const df = AP.at(ku, pg)[0] - AP.K[0], dl = -pl;
+      return [cl[0] + c * df - sn * dl, cl[1] + sn * df + c * dl]; };
+    for (const nm of ["servo", "finger", "pad", "plate"]) {
+      const bx = AP.boxes.find((q) => q.name === nm);
+      poly(bx.top.map(W), nm === "servo" || nm === "pad" ? "#1b1b1b" : "#3d8fe6", "#0e2e55", 1);
+    }
+  }
+  text(`${f[6].toFixed(1)} cm`, cl[0], cl[1] + 4.5, 11, "#b35c00", "center");
+  // cubo y pelota
+  const cu = f[9];
+  poly(rpoly(cu[0], cu[1], 0, 5, 5), "#f5d000", "#5c4a00", 1.5);
+  const b = f[10], [bx, by] = T(b[0], b[1]);
+  cx.fillStyle = "#fff"; cx.strokeStyle = "#333"; cx.lineWidth = 1.2;
+  cx.beginPath(); cx.arc(bx, by, 1.5 * K, 0, 7); cx.fill(); cx.stroke();
+}
+
+// ------------------------------------------------------------ vista lateral
+const sv = document.getElementById("side"), sx = sv.getContext("2d");
+const DIST = [];                     // distancia recorrida (cm) en cada cuadro
+function extendDist() {
+  for (let k = DIST.length; k < F.length; k++)
+    DIST.push(k ? DIST[k - 1] + Math.hypot(F[k][1] - F[k - 1][1], F[k][2] - F[k - 1][2]) : 0);
+}
+extendDist();
+const ZMAX = Math.max(...Object.values(A.z)) + 25;
+function drawSide() {
+  const W = sv.width, H = sv.height;
+  const css = getComputedStyle(document.body);
+  sx.clearRect(0, 0, W, H);
+  sx.fillStyle = "#e9edf2"; sx.fillRect(0, 0, W, H);
+  if (!F.length) return;
+  const f = F[i], d0 = DIST[i];
+  const chartH = 60, topH = H - chartH - 8;
+  const win = 120;                                   // cm visibles a lo ancho
+  const k = W / win;                                 // px por cm (misma escala en x y z)
+  const zbase = f[4] - (topH / k) * 0.25;            // el robot en el tercio de abajo
+  const X = d => W / 2 + (d - d0) * k, Y = z => topH - 12 - (z - zbase) * k;
+  // niveles de referencia
+  sx.font = "11px sans-serif"; sx.textAlign = "left";
+  for (const [lv, z] of Object.entries(A.z)) {
+    const y = Y(z); if (y < 0 || y > topH) continue;
+    sx.strokeStyle = "rgba(0,0,0,.12)"; sx.setLineDash([4, 4]); sx.beginPath(); sx.moveTo(0, y); sx.lineTo(W, y); sx.stroke();
+    sx.setLineDash([]); sx.fillStyle = "#6a7380"; sx.fillText(`nivel ${lv} · ${z} cm`, 6, y - 3);
+  }
+  // perfil del piso bajo el recorrido (altura del centro del robot en cada cuadro)
+  sx.beginPath(); let started = false;
+  for (let j = 0; j < F.length; j++) {
+    const px = X(DIST[j]); if (px < -20 || px > W + 20) continue;
+    const py = Y(F[j][4]);
+    started ? sx.lineTo(px, py) : (sx.moveTo(px, py), started = true);
+  }
+  if (started) {
+    sx.lineTo(X(DIST[Math.min(F.length - 1, i + 400)]) + 40, topH); sx.lineTo(-40, topH);
+    sx.lineTo(-40, Y(F[Math.max(0, i - 400)][4]));
+  }
+  sx.closePath(); sx.fillStyle = "#b9c0c9"; sx.fill();
+  sx.strokeStyle = "#555"; sx.lineWidth = 2; sx.stroke();
+  // robot inclinado con su forma real: oruga de 3 ruedas, caja del mBot2, mástil, brazo y garra
+  const p = f[5] * Math.PI / 180;
+  sx.save(); sx.translate(X(d0), Y(f[4])); sx.rotate(-p);
+  const Q = (x, y) => [x * k, -y * k];
+  const pathOf = (pts) => { sx.beginPath(); pts.forEach(([x, y], j) => { const [a, b] = Q(x, y); j ? sx.lineTo(a, b) : sx.moveTo(a, b); }); sx.closePath(); };
+  const WS = wheelsOf(R);
+  pathOf(trackOutline(R, WS.t)); sx.fillStyle = "#2a2f36"; sx.fill();
+  pathOf(trackOutline(R, 0)); sx.fillStyle = "#cfd6dd"; sx.fill();
+  for (const [x, y, col] of WS.list) {
+    const [a, b] = Q(x, y);
+    sx.fillStyle = col === 0xf2f2f2 ? "#f2f2f2" : "#1b1b1b"; sx.beginPath(); sx.arc(a, b, WS.r * k, 0, 7); sx.fill();
+    sx.fillStyle = "#c9a227"; sx.beginPath(); sx.arc(a, b, 0.5 * k, 0, 7); sx.fill();
+  }
+  const ch = R.contact_half || 6;
+  sx.fillStyle = "#3b8fd9"; { const [a, b] = Q(-ch, WS.r + WS.t + 2.4); sx.fillRect(a, b, 2 * ch * k, 1.2 * k); }   // chasis
+  sx.fillStyle = "rgba(70,80,90,.85)"; { const [a, b] = Q(-6.5, WS.r + WS.t + 7.4); sx.fillRect(a, b, 12.3 * k, 4.2 * k); }  // caja mBot2
+  sx.fillStyle = "#111"; { const [a, b] = Q(-6.5, WS.r + WS.t + 8.2); sx.fillRect(a, b, 4 * k, 0.8 * k); }             // CyberPi
+  const sfw = R.sensor_fwd - R.ref_rot_fwd;
+  sx.fillStyle = "#ff3d00"; { const [a, b] = Q(sfw - 1.1, 1.5); sx.fillRect(a, b, 2.2 * k, 0.6 * k); }            // Quad RGB
+  const AP = armPose(R, f[14], f[7]);
+  const line = (P1, P2, col, w) => { const [a, b] = Q(...P1), [c, d] = Q(...P2); sx.strokeStyle = col; sx.lineWidth = w; sx.beginPath(); sx.moveTo(a, b); sx.lineTo(c, d); sx.stroke(); };
+  const fillPts = (pts, fill, stroke) => { pathOf(pts); sx.fillStyle = fill; sx.fill(); if (stroke) { sx.strokeStyle = stroke; sx.lineWidth = 1; sx.stroke(); } };
+  const joint = (P, r, col) => { const [a, b] = Q(...P); sx.fillStyle = col || "#d8dde3"; sx.beginPath(); sx.arc(a, b, r * k, 0, 7); sx.fill();
+    sx.strokeStyle = "#333"; sx.lineWidth = 1; sx.stroke(); };
+  const yc = WS.r + WS.t + 2.4, wB = Math.max(2, 0.9 * k);
+  line([AP.O1[0], yc], AP.O1, "#2266cc", wB);                                    // mástil (fijo)
+  line([AP.O1[0] - 1.6, yc], [AP.O1[0] - 1.6, AP.O1[1] + 0.6], "#2266cc", wB);
+  { const [a, b] = Q(AP.O2[0] - 1.2, AP.O2[1] + 1.0); sx.fillStyle = "#1b1b1b"; sx.fillRect(a, b, 2.4 * k, 2.4 * k); }  // servo del brazo
+  { const [a, b] = Q(...AP.O2); sx.fillStyle = "#111"; sx.beginPath(); sx.arc(a, b, 1.3 * k, 0, 7); sx.fill(); }      // disco del servo
+  line(AP.O1, AP.B, "#e8402a", wB);                                                // balancín (arriba)
+  line(AP.C, AP.B, "#e8402a", wB);                                                 // acoplador (lleva la garra)
+  line(AP.O2, AP.C, "#22b04a", Math.max(2.5, 1.0 * k));                           // manivela del servo
+  // garra vista desde la derecha: lo de la izquierda (servo, dedo) atrás, la placa fija adelante
+  const hex = (c) => "#" + c.toString(16).padStart(6, "0");
+  for (const nm of ["servo", "finger", "pad", "bracket", "plate"]) {
+    const bx = AP.boxes.find((q) => q.name === nm);
+    fillPts(bx.side, nm === "plate" ? "rgba(61,143,230,.85)" : hex(bx.col), "#0e2e55");
+  }
+  for (const P of [AP.O1, AP.B, AP.C]) joint(P, 0.55);
+  joint(AP.O2, 0.45, "#22b04a");
+  sx.fillStyle = f[7] ? "#ff8c00" : "rgba(255,140,0,.6)";
+  { const [a, b] = Q(...AP.K); sx.beginPath(); sx.arc(a, b, 0.7 * k, 0, 7); sx.fill(); }                    // centro de la garra
+  sx.fillStyle = "#0b4f6c"; sx.beginPath(); sx.arc(0, 0, 3, 0, 7); sx.fill();          // centro de giro
+  sx.restore();
+  sx.fillStyle = "#1d2330"; sx.textAlign = "right"; sx.font = "13px sans-serif";
+  sx.fillText(`altura ${f[4].toFixed(1)} cm · pitch ${f[5].toFixed(1)}° · garra a ${f[6].toFixed(1)} cm`, W - 8, 18);
+  // gráfica de altura en el tiempo
+  const y0 = H - 6, tEnd = F[F.length - 1][0] || 1;
+  sx.fillStyle = "#fff"; sx.fillRect(0, H - chartH - 4, W, chartH + 4);
+  sx.strokeStyle = "#2266cc"; sx.lineWidth = 1.5; sx.beginPath();
+  F.forEach((q, j) => { const xx = q[0] / tEnd * W, yy = y0 - q[4] / ZMAX * chartH; j ? sx.lineTo(xx, yy) : sx.moveTo(xx, yy); });
+  sx.stroke();
+  const cx_ = f[0] / tEnd * W;
+  sx.strokeStyle = "#c62828"; sx.beginPath(); sx.moveTo(cx_, H - chartH - 4); sx.lineTo(cx_, H); sx.stroke();
+  sx.fillStyle = "#6a7380"; sx.textAlign = "left"; sx.font = "11px sans-serif";
+  sx.fillText("altura vs. tiempo", 6, H - chartH + 8);
+}
+sv.addEventListener("click", e => {
+  const r = sv.getBoundingClientRect();
+  if (e.clientY - r.top > r.height - 66 * r.height / sv.height) {
+    seekTime((e.clientX - r.left) / r.width * F[F.length - 1][0]);
+  }
+});
+
+function draw() {
+  V = view(); K = cv.width / V.w; CH = cv.height;
+  cx.clearRect(0, 0, cv.width, cv.height);
+  drawArena();
+  if (F.length) drawFrame();
+  drawSide();
+  if (window.draw3d) window.draw3d();
+  updatePanel();
+}
+
+// ------------------------------------------------------------ panel
+const ev = document.getElementById("events");
+function addEvents(list) {
+  list.forEach(([t, e]) => {
+    const d = document.createElement("div");
+    d.textContent = `${t.toFixed(1).padStart(6)} s  ${e}`;
+    if (e.startsWith("JUEZ")) d.className = "judge";
+    if (e.startsWith("CAIDA") || e.startsWith("ERROR")) d.className = "fall";
+    d.dataset.t = t;
+    d.onclick = () => { seekTime(t); };
+    ev.appendChild(d);
+  });
+}
+addEvents(D.events);
+function seekTime(t) {
+  let k = F.findIndex(f => f[0] >= t); if (k < 0) k = F.length - 1;
+  i = k; slider.value = i; draw();
+}
+function updatePanel() {
+  if (!F.length) return;
+  const f = F[i];
+  document.getElementById("s_m").textContent = f[12] || "-";
+  document.getElementById("s_t").textContent = `${f[0].toFixed(2)} s`;
+  document.getElementById("clock").textContent = `${f[0].toFixed(1)} / ${F[F.length - 1][0].toFixed(1)} s`;
+  document.getElementById("s_p").textContent = `x ${f[1].toFixed(1)}  y ${f[2].toFixed(1)} cm  rumbo ${f[3].toFixed(0)}°`;
+  document.getElementById("s_z").textContent = `${f[4].toFixed(1)} cm  ·  ${f[5].toFixed(1)}°`;
+  document.getElementById("s_c").textContent = `${f[7] ? "cerrada" : "abierta"} a ${f[6].toFixed(1)} cm`;
+  const l = f[8]; document.getElementById("s_led").style.background = `rgb(${l[0]},${l[1]},${l[2]})`;
+  for (const d of ev.children) d.classList.toggle("past", +d.dataset.t <= f[0]);
+}
+const rep = D.report, names = Object.fromEntries(D.missions.map(m => [m.id, m.name]));
+const tb = document.querySelector("#results tbody");
+function renderResults(missions, program, total, est) {
+  tb.innerHTML = "";
+  for (const m of missions) {
+    const pg = program[m.id];
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${m.id}</td><td>${names[m.id]}</td>` +
+      `<td class="${pg === undefined ? "" : pg ? "ok" : "bad"}">${pg === undefined ? "-" : pg ? "OK" : "falla"}</td>` +
+      `<td class="${m.ok ? "ok" : "bad"}">${m.ok ? "OK" : "no"}</td><td class="num">${m.pts}</td>`;
+    if (m.t != null) tr.style.cursor = "pointer", tr.onclick = () => seekTime(m.t);
+    tb.appendChild(tr);
+  }
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<th colspan="4">Total juez${est == null ? "" : ` (el programa estima ${est})`}</th><th class="num">${total}</th>`;
+  tb.appendChild(tr);
+}
+renderResults(rep.missions, rep.program, rep.total, rep.program_points);
+const notes = document.getElementById("notes");
+for (const n of rep.notes.concat(rep.warnings).concat(rep.error ? ["Error del programa (ver eventos)"] : [])) {
+  const li = document.createElement("li"); li.textContent = n; notes.appendChild(li);
+}
+
+// ------------------------------------------------------------ reproducción
+const slider = document.getElementById("slider"), playBtn = document.getElementById("play");
+slider.max = Math.max(0, F.length - 1);
+slider.oninput = () => { i = +slider.value; draw(); };
+playBtn.onclick = () => {
+  playing = !playing;
+  if (playing && i >= F.length - 1) i = 0;
+  playBtn.textContent = playing ? "❚❚ Pausa" : "▶ Reproducir"; last = performance.now();
+  requestAnimationFrame(tick);
+};
+document.getElementById("follow").onchange = draw;
+function tick(now) {
+  if (!playing) return;
+  const sp = +document.getElementById("speed").value;
+  const t = F[i][0] + (now - last) / 1000 * sp; last = now;
+  while (i < F.length - 1 && F[i + 1][0] <= t) i++;
+  slider.value = i; draw();
+  if (i >= F.length - 1) { playing = false; playBtn.textContent = "▶ Reproducir"; return; }
+  requestAnimationFrame(tick);
+}
+document.addEventListener("keydown", e => {
+  if (e.key === " ") { e.preventDefault(); playBtn.click(); }
+  if (e.key === "ArrowRight") { i = Math.min(F.length - 1, i + 20); slider.value = i; draw(); }
+  if (e.key === "ArrowLeft") { i = Math.max(0, i - 20); slider.value = i; draw(); }
+});
+function fit() {
+  const w = cv.clientWidth * (window.devicePixelRatio || 1);
+  cv.width = w; cv.height = w * (A.h + 4) / (A.w + 4);
+  sv.width = w; sv.height = Math.round(w * 0.42); draw();
+}
+window.addEventListener("resize", fit);
+fit();
+
+// ------------------------------------------------------------ simulador EN VIVO (simulation/live.py)
+if (D.live) {
+  document.getElementById("live").style.display = "block";
+  document.getElementById("play").style.display = "none";
+  document.getElementById("speed").style.display = "none";
+  const post = (u) => fetch(u, { method: "POST" });
+  document.querySelectorAll("#live button[data-k]").forEach(b => b.onclick = () => post("/btn?k=" + b.dataset.k));
+  document.getElementById("lplace").onclick = () => post("/place");
+  document.getElementById("lpause").onclick = () => post("/pause");
+  document.getElementById("lspeed").onchange = e => post("/speed?v=" + e.target.value);
+  document.getElementById("lnew").onclick = () => {
+    const q = `level=${nlevel.value}&seed=${nseed.value}&noise=${nnoise.value}&mode=${nmode.value}`;
+    post("/new?" + q).then(() => location.reload());
+  };
+  nlevel.value = D.params.level; nseed.value = D.params.seed; nnoise.value = D.params.noise ? 1 : 0;
+  nmode.value = D.params.mode || "comp";
+  if (!D.params.program) nmode.querySelector('option[value="user"]').disabled = true;
+  document.getElementById("lprog").textContent =
+    D.params.mode === "user" ? "corriendo: " + D.params.program : D.params.mode === "manual" ? "solo control manual" : "programa de competencia";
+  document.getElementById("lupload").onclick = async () => {
+    const f = lfile.files[0];
+    if (!f) { alert("Elige un archivo .py o .mblock"); return; }
+    const q = `name=${encodeURIComponent(f.name)}&level=${nlevel.value}&seed=${nseed.value}&noise=${nnoise.value}`;
+    const r = await fetch("/upload?" + q, { method: "POST", body: await f.arrayBuffer() });
+    const j = await r.json();
+    if (j.error) { alert("No se pudo correr " + f.name + ":\n" + j.error); return; }
+    location.reload();
+  };
+  if (D.params.mode === "manual") document.getElementById("padbox").open = true;
+
+  // ---------------------------------------------------------- control Bluetooth emulado
+  // Misma distribución que el control de Makeblock (y que el emulador del repo Challengue):
+  // L1/L2/R2/R1 arriba, cruceta, Menú / Bluetooth / +, botones 1-4, dos joysticks, LED y On/Off.
+  // Nombres que lee el programa (mbuild gamepad): Up Down Left Right N1-N4 L1 L2 R1 R2, ejes
+  // Lx Ly Rx Ry en -100..100 (Ly + = adelante).
+  (function gamepadEmu() {
+    const svg = document.getElementById("pad"), NS = "http://www.w3.org/2000/svg";
+    const el = (tag, at, parent) => { const e = document.createElementNS(NS, tag); for (const k in at) e.setAttribute(k, at[k]); (parent || svg).appendChild(e); return e; };
+    const PADC = { body: "#eceef3", edge: "#c4c8d2", shoulder: "#d4d7de", key: "#262930", on: "#3ddc97", txt: "#eceef3" };
+    // cuerpo: parte de arriba redondeada + dos agarraderas
+    el("circle", { cx: 249, cy: 427, r: 50, fill: PADC.body, stroke: PADC.edge, "stroke-width": 1.2 });
+    el("circle", { cx: 491, cy: 427, r: 50, fill: PADC.body, stroke: PADC.edge, "stroke-width": 1.2 });
+    el("rect", { x: 195, y: 262, width: 350, height: 140, rx: 28, fill: PADC.body, stroke: PADC.edge, "stroke-width": 1.2 });
+    el("rect", { x: 230, y: 380, width: 280, height: 60, fill: PADC.body });
+    el("text", { x: 370, y: 285, "text-anchor": "middle", "font-size": 8, "font-weight": 700, fill: "#aaaeb8", "font-family": "sans-serif" }).textContent = "makeblock";
+    const d = 18, C = [
+      ["L1", "L1", "rect", 258, 252, 54, 12], ["L2", "L2", "rect", 318, 251, 36, 10],
+      ["R2", "R2", "rect", 422, 251, 36, 10], ["R1", "R1", "rect", 482, 252, 54, 12],
+      ["Up", "▲", "rect", 262, 322 - d, d, d], ["Down", "▼", "rect", 262, 322 + d, d, d],
+      ["Left", "◀", "rect", 262 - d, 322, d, d], ["Right", "▶", "rect", 262 + d, 322, d, d],
+      ["Menu", "≡", "circle", 343, 322, 14], ["Bluetooth", "B", "circle", 370, 322, 14], ["Plus", "+", "circle", 398, 322, 14],
+      ["N2", "2", "circle", 472, 294, 24], ["N1", "1", "circle", 446, 321, 24],
+      ["N4", "4", "circle", 499, 321, 24], ["N3", "3", "circle", 472, 348, 24],
+    ];
+    el("rect", { x: 262 - d / 2, y: 322 - d / 2, width: d, height: d, fill: PADC.key });   // centro de la cruceta
+    const st = { on: true, mouse: new Set(), keys: new Set(), sticks: { L: [0, 0], R: [0, 0] }, kb: { L: [0, 0], R: [0, 0] }, gp: null };
+    const shapes = {};
+    for (const [name, label, shape, x, y, w, h] of C) {
+      const g = el("g", { style: "cursor:pointer" });
+      const shoulder = name[0] === "L" || name[0] === "R" && name.length === 2;
+      const s = shape === "circle"
+        ? el("circle", { cx: x, cy: y, r: w / 2, fill: PADC.key }, g)
+        : el("rect", { x: x - w / 2, y: y - h / 2, width: w, height: h, rx: shoulder ? 4 : 2, fill: shoulder ? PADC.shoulder : PADC.key, stroke: shoulder ? "#b0b4be" : "none" }, g);
+      el("text", { x: x, y: y + (shape === "circle" ? w * 0.18 : h * 0.3), "text-anchor": "middle", "font-size": shape === "circle" ? w * 0.5 : Math.min(h, 10) * 0.8,
+                   "font-weight": 700, fill: shoulder ? "#262930" : PADC.txt, "font-family": "sans-serif", "pointer-events": "none" }, g).textContent = label;
+      shapes[name] = { s, base: s.getAttribute("fill") };
+      const down = (e) => { e.preventDefault(); if (!st.on) return; st.mouse.add(name); send(); };
+      const up = () => { if (st.mouse.delete(name)) send(); };
+      g.addEventListener("pointerdown", down); g.addEventListener("pointerup", up); g.addEventListener("pointerleave", up);
+    }
+    // joysticks
+    const knobs = {};
+    for (const [side, cx] of [["L", 322], ["R", 418]]) {
+      el("circle", { cx, cy: 382, r: 22, fill: "#c4c8d2" });
+      const k = el("circle", { cx, cy: 382, r: 15, fill: PADC.key, stroke: "#11141a", "stroke-width": 2, style: "cursor:grab" });
+      knobs[side] = { k, cx, cy: 382 };
+      k.addEventListener("pointerdown", (e) => {
+        if (!st.on) return;
+        k.setPointerCapture(e.pointerId);
+        const move = (ev) => {
+          const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+          const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+          let dx = p.x - cx, dy = p.y - 382; const m = Math.hypot(dx, dy), R = 12;
+          if (m > R) { dx *= R / m; dy *= R / m; }
+          st.sticks[side] = [dx / R, -dy / R]; send();
+        };
+        const end = () => { st.sticks[side] = [0, 0]; k.removeEventListener("pointermove", move); k.removeEventListener("pointerup", end); send(); };
+        k.addEventListener("pointermove", move); k.addEventListener("pointerup", end);
+      });
+    }
+    // indicador y On/Off
+    const led = el("circle", { cx: 370, cy: 384, r: 4, fill: "#5b9cf0" });
+    const sw = el("g", { style: "cursor:pointer" });
+    el("rect", { x: 350, y: 497, width: 40, height: 16, rx: 8, fill: "#c4c8d2" }, sw);
+    const swk = el("circle", { cx: 382, cy: 505, r: 6.5, fill: PADC.on }, sw);
+    const swt = el("text", { x: 398, y: 509, "font-size": 10, "font-weight": 700, fill: "#eceef3", "font-family": "sans-serif" }, svg);
+    swt.textContent = "ON";
+    el("text", { x: 300, y: 509, "font-size": 8, fill: "#9aa3ad", "font-family": "sans-serif", "text-anchor": "end" }).textContent = "On / Off (atrás)";
+    sw.addEventListener("click", () => { st.on = !st.on; st.mouse.clear(); send(); });
+    // teclado
+    const KEYMAP = { ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", q: "L1", e: "L2", u: "R1", o: "R2", "1": "N1", "2": "N2", "3": "N3", "4": "N4" };
+    const held = new Set();
+    const typing = (ev) => /INPUT|SELECT|TEXTAREA/.test((ev.target || {}).tagName || "");
+    window.addEventListener("keydown", (ev) => {
+      if (typing(ev) || !document.getElementById("padbox").open) return;
+      const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
+      if (KEYMAP[k] || "wsjlik".includes(k) && k.length === 1) { held.add(k); ev.preventDefault(); kbUpdate(ev.shiftKey); }
+    });
+    window.addEventListener("keyup", (ev) => {
+      const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
+      if (held.delete(k)) kbUpdate(ev.shiftKey);
+    });
+    function kbUpdate(half) {
+      const g = half ? 0.5 : 1;
+      st.keys = new Set([...held].map(k => KEYMAP[k]).filter(Boolean));
+      st.kb.L = [0, ((held.has("w") ? 1 : 0) - (held.has("s") ? 1 : 0)) * g];
+      st.kb.R = [((held.has("l") ? 1 : 0) - (held.has("j") ? 1 : 0)) * g, ((held.has("i") ? 1 : 0) - (held.has("k") ? 1 : 0)) * g];
+      send();
+    }
+    // control real (Gamepad API): ejes 0-3 y botones típicos
+    window.addEventListener("gamepadconnected", () => { if (!gpTimer) gpTimer = setInterval(pollGP, 50); });
+    let gpTimer = null, lastGP = "";
+    function pollGP() {
+      const gp = (navigator.getGamepads ? navigator.getGamepads() : []).find(g => g);
+      if (!gp) { st.gp = null; return; }
+      const ax = (i) => Math.abs(gp.axes[i] || 0) > 0.08 ? gp.axes[i] : 0;
+      const b = (i) => gp.buttons[i] && gp.buttons[i].pressed;
+      const keys = [];
+      [["N1", 0], ["N2", 1], ["N3", 2], ["N4", 3], ["L1", 4], ["R1", 5], ["L2", 6], ["R2", 7], ["Up", 12], ["Down", 13], ["Left", 14], ["Right", 15]]
+        .forEach(([n, i]) => { if (b(i)) keys.push(n); });
+      st.gp = { L: [ax(0), -ax(1)], R: [ax(2), -ax(3)], keys };
+      const sig = JSON.stringify(st.gp);
+      if (sig !== lastGP) { lastGP = sig; send(); }
+    }
+    // estado combinado -> servidor
+    function combined() {
+      const keys = new Set([...st.mouse, ...st.keys, ...(st.gp ? st.gp.keys : [])]);
+      const pick = (side, i) => {
+        const v = [st.sticks[side][i], st.kb[side][i], st.gp ? st.gp[side][i] : 0];
+        return v.reduce((a, x) => Math.abs(x) > Math.abs(a) ? x : a, 0);
+      };
+      return { on: st.on, keys: [...keys], Lx: Math.round(pick("L", 0) * 100), Ly: Math.round(pick("L", 1) * 100),
+               Rx: Math.round(pick("R", 0) * 100), Ry: Math.round(pick("R", 1) * 100) };
+    }
+    let lastSent = "";
+    function send(force) {
+      const c = combined();
+      for (const n in shapes) shapes[n].s.setAttribute("fill", c.keys.includes(n) ? PADC.on : shapes[n].base);
+      for (const side of ["L", "R"]) {
+        const x = c[side + "x"] / 100 * 12, y = -c[side + "y"] / 100 * 12;
+        knobs[side].k.setAttribute("cx", knobs[side].cx + x); knobs[side].k.setAttribute("cy", knobs[side].cy + y);
+      }
+      led.setAttribute("fill", st.on ? "#5b9cf0" : "#7a808c");
+      swk.setAttribute("cx", st.on ? 382 : 358); swk.setAttribute("fill", st.on ? PADC.on : "#7a808c"); swt.textContent = st.on ? "ON" : "OFF";
+      document.getElementById("padstate").textContent =
+        `teclas [${c.keys.join(" ")}]  izq (${c.Lx}, ${c.Ly})  der (${c.Rx}, ${c.Ry})`;
+      const sig = JSON.stringify(c);
+      if (sig === lastSent && !force) return;
+      lastSent = sig;
+      fetch("/pad", { method: "POST", body: sig }).catch(() => {});
+    }
+    setInterval(() => send(true), 500);      // repite el estado (por si se pierde un mensaje)
+    send(true);
+  })();
+  let nev = 0, busy = false;
+  async function poll() {
+    if (busy) return; busy = true;
+    try {
+      const r = await fetch(`/state?f=${F.length}&e=${nev}`);
+      const st = await r.json();
+      const atEnd = i >= F.length - 1;
+      for (const f of st.frames) F.push(f);
+      extendDist();
+      addEvents(st.events); nev += st.events.length;
+      if (st.events.length) ev.scrollTop = ev.scrollHeight;
+      slider.max = Math.max(0, F.length - 1);
+      if (atEnd && F.length) { i = F.length - 1; slider.value = i; }
+      const total = st.judge.reduce((a, m) => a + m.pts, 0);
+      renderResults(st.judge, st.program, total, null);
+      const S = st.status;
+      document.getElementById("lcyber").textContent = "CyberPi │ " + S.screen.filter(x => x).join("\n        │ ");
+      document.getElementById("lstate").textContent =
+        `t ${S.t} s · ${S.paused ? "EN PAUSA · " : ""}velocidad ${S.speed}× · reinicios ${S.restarts} · caídas ${S.falls}` +
+        (S.state ? " · " + S.state : "");
+      document.getElementById("lpause").textContent = S.paused ? "Seguir" : "Pausa";
+      if (st.frames.length) draw();
+    } catch (e) { document.getElementById("lstate").textContent = "Sin conexión con simulation/live.py"; }
+    busy = false;
+  }
+  setInterval(poll, 100);
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script type="text/sim-deferred">
+(function () {
+  const msg = document.getElementById("v3msg");
+  if (!window.THREE || !THREE.OrbitControls) { msg.textContent = "No se pudo cargar three.js (¿sin internet?)"; return; }
+  msg.style.display = "none";
+  const host = document.getElementById("v3");
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
+  host.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x1b2028);
+  const camera = new THREE.PerspectiveCamera(45, 16 / 9, 1, 3000);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 0.55));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.45); sun.position.set(-80, 220, 120); scene.add(sun);
+  window._v3 = { renderer, scene, camera };
+
+  // sim (x, y, z) -> three (x, z, -y)
+  const P = (x, y, z) => new THREE.Vector3(x, z, -y);
+
+  // ---- textura del piso: la misma vista superior dibujada en un lienzo grande
+  const tex = document.createElement("canvas");
+  const RES = 8; tex.width = Math.round(A.w * RES); tex.height = Math.round(A.h * RES);
+  const save = { cx, V, K, CH };
+  cx = tex.getContext("2d"); V = { x0: 0, y0: 0, w: A.w, h: A.h }; K = RES; CH = tex.height;
+  drawArena();
+  cx = save.cx; V = save.V; K = save.K; CH = save.CH;
+  const floorTex = new THREE.CanvasTexture(tex);
+  floorTex.anisotropy = 8;
+  const floorMat = new THREE.MeshLambertMaterial({ map: floorTex });
+  const sideMat = new THREE.MeshLambertMaterial({ color: 0x9aa4b2 });
+
+  // cuadrilátero con altura por esquina y UV = posición en la pista
+  function quad(x0, y0, x1, y1, z00, z10, z11, z01, mat) {
+    const g = new THREE.BufferGeometry();
+    const v = [[x0, y0, z00], [x1, y0, z10], [x1, y1, z11], [x0, y1, z01]];
+    const pos = [], uv = [];
+    for (const k of [0, 1, 2, 0, 2, 3]) {
+      const p = P(v[k][0], v[k][1], v[k][2]); pos.push(p.x, p.y, p.z);
+      uv.push(v[k][0] / A.w, v[k][1] / A.h);
+    }
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, mat); m.material.side = THREE.DoubleSide; scene.add(m); return m;
+  }
+  function box(x0, y0, x1, y1, z0, z1, color) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, z1 - z0, y1 - y0),
+                             new THREE.MeshLambertMaterial({ color }));
+    m.position.copy(P((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2)); scene.add(m); return m;
+  }
+  function pillar(r, z, color) {           // costados de una plataforma (del suelo a su altura)
+    if (z <= 0.01) return;
+    box(r[0], r[1], r[2], r[3], -0.01, z - 0.05, color || 0x8d97a5);
+  }
+  const Z = A.z;
+  for (const k of ["1", "2", "3", "4"]) {
+    const r = A.levels[k];
+    pillar(r, Z[k]);
+    quad(r[0], r[1], r[2], r[3], Z[k], Z[k], Z[k], Z[k], floorMat);
+  }
+  const r1 = A.ramps[0], r2 = A.ramps[1];
+  quad(r1[0], r1[1], r1[2], r1[3], Z["1"], Z["2"], Z["2"], Z["1"], floorMat);
+  quad(r2[0], r2[1], r2[2], r2[3], Z["3"], Z["3"], Z["2"], Z["2"], floorMat);
+  // escalera: 8 peldaños por tramo (sube hacia -x)
+  for (const f of A.flights) {
+    const n = A.stair_steps, tread = (f[2] - f[0]) / n, rise = (Z["4"] - Z["3"]) / n;
+    for (let k = 0; k < n; k++) {
+      const x1 = f[2] - k * tread, x0 = x1 - tread;
+      box(x0, f[1], x1, f[3], Z["3"], Z["3"] + (k + 1) * rise, 0xb9bfd8);
+    }
+  }
+  // props
+  const MAG = 0xd020c8;
+  for (const [name, pr] of Object.entries(A.props)) {
+    const r = pr.rect;
+    box(r[0], r[1], r[2], r[3], pr.base, pr.base + pr.h, MAG);
+  }
+  for (const w of A.walls) {
+    const [a, b] = w, L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(L, 8, 0.8), new THREE.MeshLambertMaterial({ color: 0x5a616b }));
+    m.position.copy(P((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, Z["2"] + 4));
+    m.rotation.y = Math.atan2(b[1] - a[1], b[0] - a[0]); scene.add(m);
+  }
+  for (const o of A.obstacles) box(o[0], o[1], o[2], o[3], Z["2"], Z["2"] + 1, 0x8c6ec8);
+  box(A.tope[0], A.tope[1], A.tope[2], A.tope[3], Z["1"], Z["1"] + 1, 0x888888);
+
+  // objetos móviles
+  const cube = new THREE.Mesh(new THREE.BoxGeometry(5, 5, 5), new THREE.MeshLambertMaterial({ color: 0xf5d000 }));
+  scene.add(cube);
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(1.5, 20, 14), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+  scene.add(ball);
+  const PH = A.prism_h;
+  const prism = new THREE.Mesh(new THREE.BoxGeometry(6.4, PH, 6.4), new THREE.MeshLambertMaterial({ color: 0xe8c400 }));
+  scene.add(prism);
+
+  // robot con su forma real (marco local: +x adelante, +y arriba, -z izquierda; origen = centro de
+  // giro sobre el piso). Medidas de config.py (A, B, C, D, ruedas, sondas, brazo).
+  const robot = new THREE.Group(); scene.add(robot);
+  const lam = (c, o) => new THREE.MeshLambertMaterial(Object.assign({ color: c }, o || {}));
+  const rbox = (sx_, sy, sz, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(sx_, sy, sz), mat); m.position.set(x, y, z); robot.add(m); return m; };
+  const W3 = wheelsOf(R), off = (R.robot_w - R.belt_w) / 2, IN = R.robot_w - 2 * R.belt_w;
+  const shapeOf = (pts) => { const sh = new THREE.Shape(); pts.forEach(([x, y], j) => j ? sh.lineTo(x, y) : sh.moveTo(x, y)); sh.closePath(); return sh; };
+  for (const sd of [-1, 1]) {
+    // banda: contorno exterior (ruedas + grosor) con hueco interior
+    const sh = shapeOf(trackOutline(R, W3.t));
+    const hole = new THREE.Path(); trackOutline(R, -0.2).forEach(([x, y], j) => j ? hole.lineTo(x, y) : hole.moveTo(x, y));
+    sh.holes.push(hole);
+    const g = new THREE.ExtrudeGeometry(sh, { depth: R.belt_w, bevelEnabled: false, curveSegments: 8 });
+    g.translate(0, 0, -R.belt_w / 2);
+    const belt = new THREE.Mesh(g, lam(0x22262c)); belt.position.z = sd * off; robot.add(belt);
+    for (const [x, y, col] of W3.list) {
+      const wg = new THREE.CylinderGeometry(W3.r, W3.r, R.belt_w * 0.8, 22); wg.rotateX(Math.PI / 2);
+      const w = new THREE.Mesh(wg, lam(col)); w.position.set(x, y, sd * off); robot.add(w);
+      const hg = new THREE.CylinderGeometry(0.45, 0.45, R.belt_w + 0.4, 10); hg.rotateX(Math.PI / 2);
+      const hb = new THREE.Mesh(hg, lam(0xc9a227)); hb.position.set(x, y, sd * off); robot.add(hb);
+    }
+    // placa blanca entre las ruedas y viga del chasis
+    rbox(2 * W3.list[1][0] + 1, 2.4, 0.4, lam(0xf4f4f4), 0, W3.r + W3.t + 0.6, sd * (IN / 2 - 0.3));
+    rbox(2 * W3.list[1][0] + 2, 1.2, 1.2, lam(0x3b8fd9), 0, W3.r + W3.t + 2.4, sd * (IN / 2 - 1.4));
+    // motor (atrás, junto a la rueda blanca) y su cilindro
+    rbox(3.6, 3.2, 3.4, lam(0x8ed3f5), W3.list[0][0] + 0.4, W3.r + W3.t + 0.6, sd * (IN / 2 - 2.6));
+    const mg = new THREE.CylinderGeometry(1.1, 1.1, 4.2, 14); mg.rotateZ(Math.PI / 2);
+    const mc = new THREE.Mesh(mg, lam(0xb8b8b8)); mc.position.set(W3.list[0][0] + 4.2, W3.r + W3.t + 0.6, sd * (IN / 2 - 3.6)); robot.add(mc);
+  }
+  const yb = W3.r + W3.t + 2.4;
+  rbox(1.2, 1.2, IN, lam(0x3b8fd9), W3.list[1][0] - 0.2, yb, 0);          // vigas transversales
+  rbox(1.2, 1.2, IN, lam(0x3b8fd9), W3.list[0][0] + 2.6, yb, 0);
+  // caja del mBot2 (translúcida) y CyberPi atrás con su pantalla y joystick
+  rbox(12.3, 4.2, 9.6, new THREE.MeshPhongMaterial({ color: 0x55606a, transparent: true, opacity: 0.8, shininess: 60 }), -0.35, yb + 2.7, 0);
+  rbox(4.0, 1.0, 9.2, lam(0x1a1d22), -4.6, yb + 5.2, 0);
+  rbox(1.6, 0.1, 2.2, lam(0x2d6cdf, { emissive: 0x0d2a66 }), -4.4, yb + 5.75, 0.2);
+  const js = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.6, 12), lam(0x9a9a9a)); js.position.set(-4.4, yb + 5.9, -2.8); robot.add(js);
+  // Quad RGB bajo el chasis con sus 4 sondas (separación real 2.4 / 1.25 / 2.4)
+  const sfw = R.sensor_fwd - R.ref_rot_fwd;
+  rbox(2.2, 0.35, R.probe_pitch + 2 * (R.probe_outer || R.probe_pitch) + 2.4, lam(0x16181c), sfw, 1.4, 0);
+  { const pi = R.probe_pitch / 2, po = pi + (R.probe_outer || R.probe_pitch);
+    for (const lat of [-po, -pi, pi, po]) {
+      const pr = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 8), lam(0xff3d00, { emissive: 0x551100 }));
+      pr.position.set(sfw, 1.15, lat); robot.add(pr);
+    } }
+  // brazo: mástil (corrido arm_lat a la izquierda), eslabones y garra
+  const zA = -(R.arm_lat || 0), aw = R.arm_w || 4.9;
+  const armMat = lam(0x2f7fe0), mastMat = lam(0x2266cc);
+  const bar = (mat, th) => { const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat); m.userData.th = th; robot.add(m); return m; };
+  const setBar = (m, a, b, z, depth) => {
+    const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 0.01;
+    m.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, z); m.scale.set(len, m.userData.th, depth || m.userData.th);
+    m.rotation.set(0, 0, Math.atan2(dy, dx));
+  };
+  const A0 = armPose(R, 45, false);
+  for (const sd of [-1, 1]) {                                     // mástil fijo a los lados
+    setBar(bar(mastMat, 0.9), [A0.O1[0], yb], A0.O1, zA + sd * aw / 2, 0.9);
+    setBar(bar(mastMat, 0.9), [A0.O1[0] - 1.6, yb], [A0.O1[0] - 1.6, A0.O1[1] + 0.6], zA + sd * aw / 2, 0.9);
+  }
+  const axle = (P, len, r, col) => { const ag = new THREE.CylinderGeometry(r, r, len, 10); ag.rotateX(Math.PI / 2);
+    const m = new THREE.Mesh(ag, lam(col || 0xcccccc)); m.position.set(P[0], P[1], zA); robot.add(m); return m; };
+  axle(A0.O1, aw + 1.6, 0.3);                                     // eje fijo de arriba
+  rbox(2.4, 2.4, 1.4, lam(0x1b1b1b), A0.O2[0], A0.O2[1] - 0.2, zA + aw / 2 + 1.0);   // servo del brazo
+  axle(A0.O2, aw + 1.0, 0.3);
+  const horn = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 0.4, 20), lam(0x111111));
+  horn.geometry.rotateX(Math.PI / 2); horn.position.set(A0.O2[0], A0.O2[1], zA + aw / 2 + 0.3); robot.add(horn);
+  // barras en pares (una a cada lado del brazo), como en el robot
+  const crankMat = lam(0x2f7fe0), pairs = { crank: [], rocker: [], coupler: [] };
+  for (const sd of [-1, 1]) for (const key in pairs) pairs[key].push([bar(key === "crank" ? crankMat : armMat, 0.8), sd]);
+  const jB = axle([0, 0], aw + 1.0, 0.25), jC = axle([0, 0], aw + 1.0, 0.25);
+  const blue = lam(0x3d8fe6), black = lam(0x1d1d1d);
+  let clawParts = [];
+  const clawDot = new THREE.Mesh(new THREE.SphereGeometry(0.6, 10, 8), lam(0xff8c00)); robot.add(clawDot);
+  let armKey = null;
+  function poseArm(servo, closed) {
+    const key = (+servo).toFixed(1) + (closed ? "c" : "o");
+    if (key === armKey) return;                    // sin cambios: no rehacer la garra
+    armKey = key;
+    const A = armPose(R, servo, closed);
+    for (const [m, sd] of pairs.crank) setBar(m, A.O2, A.C, zA + sd * (aw / 2 - 0.2), 0.5);
+    for (const [m, sd] of pairs.rocker) setBar(m, A.O1, A.B, zA + sd * (aw / 2 - 0.2), 0.5);
+    for (const [m, sd] of pairs.coupler) setBar(m, A.C, A.B, zA + sd * (aw / 2 - 0.9), 0.5);
+    jB.position.set(A.B[0], A.B[1], zA); jC.position.set(A.C[0], A.C[1], zA);
+    // garra: piezas extruidas (se rehacen porque cambian de forma y lugar)
+    for (const m of clawParts) { robot.remove(m); m.geometry.dispose(); }
+    clawParts = A.boxes.map((bx) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(bx.sg, bx.se, bx.sl), lam(bx.col));
+      const c = Math.cos(bx.phi || 0), sn = Math.sin(bx.phi || 0);
+      const X = new THREE.Vector3(A.g[0] * c, A.g[1] * c, sn), Y = new THREE.Vector3(A.e[0], A.e[1], 0);
+      const Z = new THREE.Vector3().crossVectors(X, Y);
+      m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(X, Y, Z));
+      const p = A.at(bx.e, bx.g); m.position.set(p[0], p[1], zA + bx.l); robot.add(m); return m;
+    });
+    clawDot.position.set(A.K[0], A.K[1], zA);
+    clawDot.material.color.set(closed ? 0xff8c00 : 0xffc480);
+  }
+  poseArm(45, false);
+  window.v3 = { camera, controls, robot, P };      // para inspeccionar desde la consola
+
+  camera.position.copy(P(A.w * 0.5, -45, 250)); controls.target.copy(P(A.w * 0.5, A.h * 0.5, 10));
+  let lastRobot = null;
+  document.getElementById("v3follow").checked = false;   // empieza con la vista general
+  document.getElementById("v3top").onclick = () => {
+    document.getElementById("v3follow").checked = false;
+    controls.target.copy(P(A.w * 0.5, A.h * 0.5, 10)); camera.position.copy(P(A.w * 0.5, -45, 250));
+  };
+  document.getElementById("v3chase").onclick = () => {
+    document.getElementById("v3follow").checked = true;
+    if (!F.length) return;
+    const f = F[i], c = Math.cos(f[3] * Math.PI / 180), s_ = Math.sin(f[3] * Math.PI / 180);
+    controls.target.copy(P(f[1], f[2], f[4] + 5));
+    camera.position.copy(P(f[1] - 55 * c, f[2] - 55 * s_, f[4] + 45));
+  };
+
+  window.draw3d = function () {
+    if (!F.length) return;
+    const f = F[i];
+    robot.position.copy(P(f[1], f[2], f[4]));
+    robot.rotation.set(0, 0, 0);
+    robot.rotateY(f[3] * Math.PI / 180);
+    robot.rotateZ(f[5] * Math.PI / 180);
+    poseArm(f[14], f[7]);
+    cube.position.copy(P(f[9][0], f[9][1], f[9][2]));
+    ball.position.copy(P(f[10][0], f[10][1], f[10][2]));
+    prism.position.copy(P(f[11][0], f[11][1], Z["3"] + PH / 2 - (f[11][2] ? 12 : 0)));
+    if (document.getElementById("v3follow").checked) {
+      const tgt = P(f[1], f[2], f[4] + 5);
+      if (lastRobot) camera.position.add(tgt.clone().sub(lastRobot));
+      else {
+        const c = Math.cos(f[3] * Math.PI / 180), s_ = Math.sin(f[3] * Math.PI / 180);
+        camera.position.copy(P(f[1] - 55 * c, f[2] - 55 * s_, f[4] + 75));
+      }
+      controls.target.copy(tgt); lastRobot = tgt;
+    } else lastRobot = null;
+    controls.update(); renderer.render(scene, camera);
+  };
+  function resize() {
+    const w = host.clientWidth, h = host.clientHeight;
+    renderer.setSize(w, h, false); renderer.domElement.style.width = "100%"; renderer.domElement.style.height = "100%";
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+  window.addEventListener("resize", resize); resize();
+  (function loop() {
+    try { controls.update(); renderer.render(scene, camera); }
+    catch (e) { msg.style.display = "flex"; msg.textContent = "Error 3D: " + e.message; console.error(e); return; }
+    requestAnimationFrame(loop);
+  })();
+  window.draw3d();
+})();
+</script>
+</body>
+</html>

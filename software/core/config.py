@@ -84,6 +84,18 @@ P = {
     "arm_x90": 0.0,          # TODO(medir)
     "arm_pivot_fwd": 10.0,   # TODO(medir) referencia -> eje fijo de arriba del brazo (solo para dibujar)
     "arm_pivot_h": 12.2,     # MEDIDO (G): piso -> eje fijo de arriba del brazo
+    # Cuadrilátero articulado del brazo (solo para dibujarlo; la física usa la tabla de arriba).
+    # Mástil fijo: eje de arriba (arm_pivot) y, debajo, el eje del servo. El servo gira la barra
+    # de abajo (manivela); la barra de arriba (balancín) gira en el eje fijo; la barra que une sus
+    # puntas (acoplador) lleva la garra atornillada, por eso la garra se inclina al subir.
+    # TODO(medir): estimado de las fotos (escala por las ruedas de 3.95 cm).
+    "arm_ground": 5.0,       # TODO(medir) eje fijo de arriba -> eje del servo (hacia abajo)
+    "arm_ground_dx": 0.7,    # TODO(medir) el eje del servo va así de adelante del eje fijo
+    "arm_crank": 7.2,        # TODO(medir) barra de abajo: eje del servo -> articulación del acoplador
+    "arm_rocker": 5.75,      # TODO(medir) barra de arriba: eje fijo -> articulación del acoplador
+    "arm_coupler": 7.0,      # TODO(medir) acoplador: articulación de abajo -> de arriba
+    "arm_claw_u": 1.9,       # TODO(medir) centro de la garra: cm sobre la articulación de abajo
+    "arm_claw_v": 7.9,       # TODO(medir) centro de la garra: cm delante del acoplador
     "claw_tip": 3.0,         # TODO(medir) del centro de la garra a la punta de los dedos
     "h_floor": 8.5,          # lo más bajo que llega (servo 0°); el brazo no alcanza el piso
     "h_pedestal": 12.5,      # sobre el pedestal (10 cm + medio cubo)
@@ -100,6 +112,9 @@ P = {
     "com_fwd": -1.0,         # TODO(medir) centro de masa del chasis, adelante del centro de giro
     "com_h": 6.5,            # TODO(medir) altura del centro de masa del chasis sobre el piso
     "arm_mass": 0.15,        # TODO(medir) fracción del peso que está en brazo + garra
+    "arm_w": 4.9,            # MEDIDO (F, vista superior): ancho del marco del brazo
+    "arm_lat": -0.75,        # MEDIDO (E = 5.97 de la oruga izquierda al marco): centro del marco
+                             # 0.75 a la DERECHA del centro (+ = izquierda); (15.35-4.9)/2 - 5.97
     "claw_open_w": 9.0,      # TODO(medir) separación interior de los dedos con la garra abierta
                              # (el prisma mide ~7 cm de base en el plano; pregunta abierta)
 
@@ -137,7 +152,10 @@ P = {
     "slope_min_v": 4.0,      # cm/s: subiendo más lento que esto (o resbalando) -> asistencia
     "slope_boost": 60,       # %/s: cuánto sube la potencia extra mientras haga falta (máx. +60)
     "h_top": 23.0,           # servo a 90°: garra arriba, encima de la nariz (rodear la torre)
-    "h_climb": 8.5,          # servo a 0°: garra baja y al frente al subir (adelanta y baja el centro de masa)
+    "h_climb": 10.5,         # garra baja y al frente al subir (adelanta y baja el centro de masa).
+                             # No a 8.5 (servo 0°): el brazo baja al detectar la rampa (~10° de
+                             # pitch, cola aún en el piso) y el cubo pasaba a 1.8 cm de la rampa
+                             # (0.4 cm con una rampa 20 % más empinada). Con 10.5: 4.0 / 2.8 cm.
 
     # --- medidas de la PISTA (MEDIR en la pista de prueba; sin ultrasónico son la referencia)
     # TODO(medir en pista): valores sacados del plano del reglamento (simulation/arena.py)

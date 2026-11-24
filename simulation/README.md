@@ -134,3 +134,29 @@ una rampa de 40° la asistencia evita que se quede parado, pero el avance para q
 - **programa**: competencia / solo manual / programa subido, para "Nueva corrida".
 - **Control Bluetooth de Makeblock (emulado)**: la misma distribución que el control real (y que
   el emulador del repo Challengue). Ver [docs/control_manual.md](../docs/control_manual.md).
+
+## Simulador web (GitHub Pages, sin instalar nada)
+
+El mismo simulador en vivo (programa de competencia y control manual con teclado o gamepad)
+corre dentro del navegador con [Pyodide](https://pyodide.org) (Python compilado a WebAssembly):
+
+```bash
+python3 simulation/build_web.py            # genera docs/simulador/
+python3 simulation/build_web.py --serve    # y lo sirve en http://127.0.0.1:8780 para probarlo
+```
+
+Publicarlo: en GitHub, **Settings → Pages → Deploy from a branch → `main` / `/docs`**. Queda en
+`https://<usuario>.github.io/<repositorio>/simulador/`.
+
+- Hay que volver a correr `build_web.py` (y subir `docs/simulador/`) cada vez que cambie el
+  código del robot o del simulador: `rover_py.json` lleva una copia de los `.py`.
+- La primera visita descarga Python (~10 MB, queda en caché) y recarga la página una vez para
+  activar `coi-sw.js`: un service worker que agrega las cabeceras COOP/COEP que GitHub Pages no
+  deja configurar (sin ellas el navegador no permite la memoria compartida con la que la página
+  le pasa los botones al simulador). Funciona en Chrome, Edge y Firefox recientes.
+- "Nueva corrida" recarga la página (unos segundos) con el nivel, la semilla y el modo elegidos.
+- Todavía no se pueden subir programas propios (`userprog.py` usa hilos, que Pyodide no tiene):
+  para eso, `simulation/live.py` en la computadora.
+
+Archivos: `simulation/web/` (`live_web.py` = live.py sin servidor ni hilos, `sim-worker.js`,
+`loader.js`, `coi-sw.js`) y `simulation/build_web.py`.

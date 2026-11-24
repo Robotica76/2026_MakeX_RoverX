@@ -99,29 +99,26 @@ T2_PLACED = (131.9, 30.4)        # TODO(pista) centro de giro tras colocar en la
 T2_FROM_M4 = (133.9, 26.8)       # TODO(pista) centro de giro al terminar la misión 4 (mirando al sur)
 CORRIDOR_TURN = (134.2, 43.5)    # girar al este: y <= 61 - 16 - 1.5
 CORRIDOR_ENTRY_Y = 45.0          # centro de la abertura izquierda (y 30.5 .. 60.2)
-CORRIDOR_W1 = (181.0, 42.5)      # TODO(pista) donde se gira al norte para escuadrar arriba: a 17.7 cm del muro
-                                 # de abajo (la nariz barre 16 cm). x: el pivote hacia atrás barre 20.6 cm
-                                 # al oeste (muro izquierdo en x 152.9) y el giro al norte 16 al este (muro
-                                 # derecho en 212.5): x entre 175 y 194.5. Se llega retrocediendo desde el
-                                 # muro derecho; si patina se queda más al este (hasta 13 cm de margen)
-CORRIDOR_EAST_X = 212.5 - 11.85  # x del centro de giro con la nariz en el muro derecho (geo.track_front())
-CORRIDOR_TO_EAST_S = 9.0         # s al este a v_slow hasta apoyarse en él (~42 cm con patinaje)
-CORRIDOR_TO_WALL_S = 6.0         # s al norte a v_slow: ~35 cm hasta el muro con patinaje, y empuja
-CORRIDOR_WALL_Y = 0.9 + 11.85    # y del centro de giro con la nariz en el muro (geo.track_front())
-# Salida (lo mostró el simulador con el robot medido): la abertura del muro derecho mide 29.6 cm
-# y el robot 21.35, quedan 4 cm por lado. Un giro EN EL LUGAR con una oruga sobre un recorte
-# corría el robot hasta 6 cm sin que la odometría lo viera, y un retroceso con las DOS orugas
-# sobre recortes también (retrocedía 10 cm creyendo 17): chocaba con la punta del muro de arriba.
-# Ahora, desde el muro mismo (y exacta), se gira HACIA ATRÁS SOBRE LA ORUGA IZQUIERDA (quieta, no
-# patina): el centro gira 11.9 cm alrededor de ella y queda al este, 11.9 al sur del muro + nariz,
-# sin depender de ninguna distancia medida. La nariz se aleja del muro desde el primer grado.
-CORRIDOR_OFF_CM = 0.8          # despegar la nariz del muro antes de pivotear
-CORRIDOR_PIVOT_DY = 11.9       # = geo.track_w() * skid / 2: lo que baja el centro al pivotear
+# Cruce EN DIAGONAL sin tocar muros (estrategia del equipo: apoyarse en los muros alinea pero
+# trae más problemas). Una sola recta por el centro de las dos aberturas: abertura izquierda
+# (y 30.5 .. 60.3) y derecha (y 0.9 .. 30.5), robot de 21.35: 2.3 cm a las puntas de los muros.
+# Sobre los recortes las orugas patinan: el robot avanza 8 a 28 cm MENOS de lo que miden los
+# encoders (simulador), así que la distancia no sirve para saber dónde va. La diagonal sigue
+# la recta con odometría (corrige el desvío lateral que deja el giroscopio solo: hasta 4 cm) y
+# termina cuando una sonda ve la línea de salida (y 12): como la recta es fija, ese punto también
+# lo es y la odometría queda exacta ahí, sin importar cuánto patinó.
+CORRIDOR_DIAG_HEAD = -26.0       # rumbo de la diagonal (noreste)
+CORRIDOR_DIAG_PT = (212.7, 16.0) # la recta pasa por el centro de la abertura derecha
+CORRIDOR_DIAG_START_X = 150.5    # x del centro de giro al pivotear (sobre la oruga izquierda,
+                                 # el centro avanza 5.2 y sube 1.2) para quedar sobre la recta
+CORRIDOR_DIAG_MAX_CM = 110.0     # por encoders (con patinaje miden hasta el doble)
+CORRIDOR_DIAG_V = 14             # lento y con el rumbo más firme: con una oruga sobre un recorte
+CORRIDOR_DIAG_KP = 2.5           # (tracción 0.35..0.75) el control a v_slow y head_kp 1.2 dejaba
+                                 # hasta 8° de error y 3 cm de desvío (holgura 2.3); así, <= 1.4 cm.
+                                 # TODO(calibrar): si oscila en el robot real, bajar CORRIDOR_DIAG_KP
+CORRIDOR_DIAG_DET = (208.96, 17.82)  # TODO(pista) centro de giro cuando la sonda izquierda
+                                 # exterior (L2) toca la línea de salida yendo por la diagonal
 CORRIDOR_EXIT_Y = 15.9         # recta de salida: centro de la abertura (y 0.9 .. 30.5)
-CORRIDOR_S_DEG = 53            # luego una "S" de dos pivotes hacia adelante (izquierda sobre la oruga
-                               # izquierda y derecha sobre la derecha, 53° cada uno) sube el centro
-                               # 2 * 11.9 * (1 - cos 53°) = 9.5 cm hasta CORRIDOR_EXIT_Y sin desviarse
-                               # (antes se corregía en diagonal y con un recorte llegaba tarde)
 CORRIDOR_DIAG_X = 218.6        # TODO(pista) x del centro de giro cuando las sondas centrales
                                # ven la diagonal de la línea yendo al este por CORRIDOR_EXIT_Y
 CORRIDOR_TURN_X = 223.0        # girar hasta que la cola rebase la punta del muro (x 212.7) y el
@@ -135,24 +132,16 @@ CORRIDOR_TURN_HEAD = 60        # rumbo al girar: las sondas quedan junto a la l�
 # salida (arriba a la derecha). Al girar en el lugar el robot barre ~13 cm y la línea termina a
 # 12 cm del muro de abajo, así que el primer giro es suave (lo mostró el simulador).
 CORRIDOR = [
-    # Los recortes hacen PATINAR las orugas (con tramos por distancia: 5 % con patinaje en el
-    # simulador). La odometría encoders + giroscopio (odometry.py) corrige cuando patina UNA oruga;
-    # cuando patinan las dos no hay forma de saberlo, así que la referencia es el muro de arriba:
     ("goto", CORRIDOR_TURN[0], CORRIDOR_TURN[1]),        # al sur, sin seguir la diagonal
     ("head", 0),
-    ("track", 0, "y", CORRIDOR_ENTRY_Y, 24),            # entra por el centro de la abertura
-    # x exacta: con las dos orugas sobre recortes la odometría llegó a quedarse 15 cm corta y el
-    # pivote de después barría el muro izquierdo. Se escuadra contra el muro derecho por la recta
-    # y = W1 y se retrocede (si patina al retroceder queda más al este: el lado seguro)
-    ("square", 0, CORRIDOR_TO_EAST_S, "x", CORRIDOR_EAST_X, None, CORRIDOR_W1[1]),
-    ("back_to", "x", CORRIDOR_W1[0] - CORRIDOR_PIVOT_DY, None, 0, CORRIDOR_W1[1]),
-    # al norte PIVOTEANDO sobre la oruga izquierda: la cola barre 12.2 cm hacia el muro de abajo
-    # (girando en el lugar 16) y el centro avanza 11.9 al este, hasta W1
-    ("pivot", -90),
-    ("square", -90, CORRIDOR_TO_WALL_S, "y", CORRIDOR_WALL_Y),    # al norte hasta el muro: y exacta
-    ("straight", -CORRIDOR_OFF_CM, "v_slow"),            # despegar la nariz del muro
-    ("pivot", 0, "back"),                                # al este, hacia atrás sobre la oruga izquierda
-    ("pivot", -CORRIDOR_S_DEG), ("pivot", 0),            # "S": a la recta de salida
+    # hasta la abertura (aún sin recortes: la odometría es buena aquí)
+    ("track", 0, "y", CORRIDOR_ENTRY_Y, CORRIDOR_DIAG_START_X - CORRIDOR_TURN[0]),
+    ("pivot", CORRIDOR_DIAG_HEAD),                       # sobre la oruga izquierda (no patina)
+    ("diag", CORRIDOR_DIAG_PT[0], CORRIDOR_DIAG_PT[1], CORRIDOR_DIAG_HEAD, CORRIDOR_DIAG_MAX_CM,
+     CORRIDOR_DIAG_DET[0], CORRIDOR_DIAG_DET[1], CORRIDOR_DIAG_V, CORRIDOR_DIAG_KP),
+    # al este PIVOTEANDO sobre la oruga derecha: la esquina delantera izquierda se aleja de la
+    # orilla de la arena desde el primer grado y el centro queda sobre la recta de salida
+    ("pivot", 0),
     # al este por el centro de la abertura hasta ver la diagonal: fija la x (el error de x de
     # los giros anteriores llegaba a 7 cm y decidía dónde girar)
     ("track_line", 0, "y", CORRIDOR_EXIT_Y, 60),

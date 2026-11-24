@@ -290,8 +290,10 @@ def run_step(step):
     if kind == "pose":
         # ("pose", x, y, rumbo): posición conocida en el mapa (cm; x este, y sur) -> odometría
         # rumbo None: el que ya trae ("ref" anterior + giroscopio), solo se fija la posición
+        # x o y None: se queda la que trae la odometría (p. ej. solo actualizar el rumbo tras line_ref)
         hdg = step[3] if step[3] is not None else heading_ref + hal.heading()
-        odo.set_pose(step[1], step[2], hdg)
+        ox, oy, _ = odo.pose()
+        odo.set_pose(ox if step[1] is None else step[1], oy if step[2] is None else step[2], hdg)
         heading_ref = hdg - hal.heading()
         return True
     if kind == "square":
@@ -335,6 +337,29 @@ def run_step(step):
         return odo.track(x, y, step[1], speed, timeout=2.0 + val(step[4]) / 5.0,
                          max_cm=val(step[4]), stop=motion.on_line,
                          max_deg=step[6] if len(step) > 6 else None)
+    if kind == "diag":
+        # ("diag", x0, y0, rumbo, max_cm, x_det, y_det[, vel[, head_kp]]): seguir la recta que pasa
+        # por (x0, y0) con ese rumbo (cualquiera, no solo este/sur) corrigiendo rumbo y desvío
+        # lateral, hasta que CUALQUIER sonda vea una línea. Ese punto de la línea es fijo (la
+        # recta no cambia), así que ahí la odometría pasa a (x_det, y_det): el patinaje sobre los
+        # recortes solo cambia CUÁNDO llega, no dónde.
+        speed = val(step[7]) if len(step) > 7 else cfg.P["v_slow"]
+
+        def seen():
+            b = hal.line_bits()
+            return any(b[pr] for pr in cfg.PROBES)
+        kp0 = cfg.P["head_kp"]
+        if len(step) > 8:
+            cfg.P["head_kp"] = val(step[8])    # más firme: una oruga sobre un recorte la frena
+        try:
+            ok = odo.track(step[1], step[2], step[3], speed, timeout=2.0 + val(step[4]) / 4.0,
+                           max_cm=val(step[4]), stop=seen)
+        finally:
+            cfg.P["head_kp"] = kp0
+        if ok:
+            _, _, h = odo.pose()
+            odo.set_pose(step[5], step[6], h)
+        return ok
     if kind == "track":
         # ("track", rumbo, coord, valor, cm[, vel]): como track_line pero sin parar en líneas
         speed = val(step[5]) if len(step) > 5 else cfg.P["v_slow"]
