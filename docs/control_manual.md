@@ -1,7 +1,9 @@
 # Control manual (Bluetooth Controller de Makeblock)
 
-Código: [`software/manual/manual.py`](../software/manual/manual.py). Se entra desde la pantalla
-de inicio del programa de competencia con **A**; se sale con **A** (abortar).
+Programa para el robot: [`mblock/rover_x_manual.py`](../mblock/rover_x_manual.py) (fuente:
+[`software/robot/rover_x_manual.py`](../software/robot/rover_x_manual.py) y
+[`software/manual/manual.py`](../software/manual/manual.py)). En el CyberPi: **B** = empezar el
+control, **A** = parar (el robot se detiene y vuelve a esperar B).
 
 Misiones manuales (alianza): cubos M-A-K-E-X en la barra del nivel 2 (en orden y de frente),
 activar las rampas (el primer acceso es por la **escalera**) y 4 cilindros (5 × 15 cm) parados

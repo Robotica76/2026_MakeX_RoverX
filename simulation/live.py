@@ -1,4 +1,4 @@
-"""Simulador EN VIVO: corre el programa de competencia real (software/robot/rover_x_2026.py) con
+"""Simulador EN VIVO: corre el programa de competencia real (software/robot/rover_x_auto.py) con
 los botones del CyberPi y la recolocación del equipo.
 
     python3 simulation/live.py            # abre http://127.0.0.1:8770
@@ -177,12 +177,12 @@ class Session:
 
     # ------------------------------------------------------------ hilo del programa
     def _program(self):
-        src = (ROOT / "software" / "robot" / "rover_x_2026.py").read_text(encoding="utf-8")
+        src = (ROOT / "software" / "robot" / "rover_x_auto.py").read_text(encoding="utf-8")
         src = src.rstrip()
         if src.endswith("main()"):
             src = src[:-len("main()")]
-        ns = {"__name__": "rover_x_2026"}
-        exec(compile(src, "rover_x_2026.py", "exec"), ns)
+        ns = {"__name__": "rover_x_auto"}
+        exec(compile(src, "rover_x_auto.py", "exec"), ns)
         return ns["main"]
 
     def _run(self):

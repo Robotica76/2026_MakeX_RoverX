@@ -8,12 +8,16 @@ un **mBot2 con kit Rover** programado en **MicroPython** en el CyberPi.
 
 ## Qué hace
 
-```text
-encender -> carga parámetros guardados -> menú: nivel sugerido por el color de la zona
-            (Arr/Abj cambia · Derecha = ajustes y calibración de línea)
-A (señal del juez) -> autónomo desde ese nivel        B = abortar (para pedir reinicio)
-fin -> A = control manual (alianza)  ·  B = volver al menú
-```
+Son **dos programas**, uno para cada parte de la competencia. Los archivos listos para pegar en
+mBlock están en [`mblock/`](mblock):
+
+| Archivo para el robot | Botones del CyberPi |
+| --- | --- |
+| [`mblock/rover_x_auto.py`](mblock/rover_x_auto.py) (autónomo) | joystick **arriba** = nivel 1, **abajo** = 2, **izquierda** = 3, **derecha** = 4 · **B** = empezar el tramo · **A** = parar · centro = ajustes y calibración |
+| [`mblock/rover_x_manual.py`](mblock/rover_x_manual.py) (manual, alianza) | **B** = empezar el control con el gamepad · **A** = parar |
+
+El autónomo corre el tramo del nivel elegido y se detiene al terminarlo; vuelve a la pantalla de
+inicio con el siguiente nivel ya elegido.
 
 ## Organización
 
@@ -23,7 +27,8 @@ fin -> A = control manual (alianza)  ·  B = volver al menú
 | [software/controls](software/controls) | `linefollow.py` (PID, cruces con memoria, giros en cruce, verde opcional), `motion.py` (giros y rectas con giroscopio, rampas, escalera, rodeo), `gripper.py` |
 | [software/autonomous](software/autonomous) | `missions.py` (ruta como datos, misiones 1 a 12 y meta), `autonomous.py` (ejecutor y elección de nivel) |
 | [software/manual](software/manual) | `manual.py` (Bluetooth Controller) |
-| [software/robot](software/robot) | `rover_x_2026.py`, programa de competencia |
+| [software/robot](software/robot) | `rover_x_auto.py` (autónomo) y `rover_x_manual.py` (manual): código fuente de los dos programas |
+| [mblock](mblock) | Los dos programas en un solo archivo cada uno, listos para mBlock (generados) |
 | [tools/robot/api_check.py](tools/robot/api_check.py) | Programa de prueba y calibración para el robot |
 | [tools/scripts/bundle_for_mblock.py](tools/scripts/bundle_for_mblock.py) | Junta todos los módulos en un solo archivo para mBlock |
 | [simulation](simulation/README.md) | Simulador del área automática: pista del reglamento, física, juez, Monte Carlo y reproducción HTML |
@@ -49,15 +54,14 @@ Simulador del autónomo (corre el programa real en la pista virtual y abre la re
 python3 simulation/run_auto.py
 ```
 
-Cargar en el robot: generar un solo archivo y pegarlo en el editor de Python de mBlock
-(dispositivo mBot2, modo **Upload**):
+Cargar en el robot: abrir `mblock/rover_x_auto.py` o `mblock/rover_x_manual.py`, copiar todo y
+pegarlo en el editor de Python de mBlock (dispositivo mBot2, modo **Upload**). Esos archivos se
+generan; no se editan a mano. Después de cambiar el código fuente hay que regenerarlos
+(una prueba avisa si quedaron desactualizados):
 
 ```bash
-python3 tools/scripts/bundle_for_mblock.py software/robot/rover_x_2026.py
+python3 tools/scripts/bundle_for_mblock.py --all
 ```
-
-Se genera `build/rover_x_2026_mblock.py` (no se versiona: siempre se edita el código fuente
-y se vuelve a empaquetar).
 
 ## Primeros pasos con el robot
 

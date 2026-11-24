@@ -11,8 +11,8 @@ Other imports (cyberpi, mbot2, mbuild, gamepad, time) are kept once at the top. 
 `if __name__ == "__main__":` block is dropped. Comments are not kept (the bundle is generated:
 edit the source files and bundle again).
 
-    python tools/scripts/bundle_for_mblock.py software/robot/rover_x_2026.py
-    python tools/scripts/bundle_for_mblock.py software/robot/rover_x_2026.py -o build/rover.py
+    python tools/scripts/bundle_for_mblock.py --all       # the two robot programs -> mblock/
+    python tools/scripts/bundle_for_mblock.py software/robot/rover_x_auto.py -o build/rover.py
 
 Modules are searched next to the program first, then under software/. Adapted from the
 team's Storm Breaker repository.
@@ -210,15 +210,32 @@ def bundle(program: Path, roots=ROOTS) -> str:
     return Bundler(roots).bundle(Path(program))
 
 
+# the robot programs and their ready-to-paste files (committed, so the team finds them in the repo)
+PROGRAMS = {
+    REPO / "software/robot/rover_x_auto.py": REPO / "mblock/rover_x_auto.py",
+    REPO / "software/robot/rover_x_manual.py": REPO / "mblock/rover_x_manual.py",
+}
+
+
+def write(program: Path, out: Path):
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(bundle(program), encoding="utf-8")
+    print(f"wrote {out} ({out.stat().st_size // 1024} KB): paste it into mBlock's Python editor")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("program", type=Path)
+    ap.add_argument("program", type=Path, nargs="?")
     ap.add_argument("-o", "--output", type=Path, help="default: build/<program>_mblock.py")
+    ap.add_argument("--all", action="store_true", help="bundle the robot programs into mblock/")
     args = ap.parse_args(argv)
-    out = args.output or REPO / "build" / f"{args.program.stem}_mblock.py"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(bundle(args.program), encoding="utf-8")
-    print(f"wrote {out} ({out.stat().st_size // 1024} KB): paste it into mBlock's Python editor")
+    if args.all:
+        for program, out in PROGRAMS.items():
+            write(program, out)
+        return
+    if args.program is None:
+        ap.error("give a program or --all")
+    write(args.program, args.output or REPO / "build" / f"{args.program.stem}_mblock.py")
 
 
 if __name__ == "__main__":

@@ -411,14 +411,18 @@ def test_manual_arm_preset_uses_geometry():
 
 
 # ---------------------------------------------------------------- bundle para mBlock
-def test_bundle_is_single_valid_file_without_project_imports(tmp_path):
+@pytest.mark.parametrize("program", ["rover_x_auto", "rover_x_manual"])
+def test_bundle_is_single_valid_file_without_project_imports(tmp_path, program):
     out = tmp_path / "rover.py"
     subprocess.run([sys.executable, str(ROOT / "tools/scripts/bundle_for_mblock.py"),
-                    str(ROOT / "software/robot/rover_x_2026.py"), "-o", str(out)], check=True)
+                    str(ROOT / "software" / "robot" / (program + ".py")), "-o", str(out)], check=True)
     tree = ast.parse(out.read_text())
     imported = {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
     assert imported <= {"time", "math", "json", "cyberpi", "mbot2", "mbuild", "gamepad"}
     assert not any(isinstance(n, ast.JoinedStr) for n in ast.walk(tree))   # sin f-strings
+    # el archivo de mblock/ (el que se pega en mBlock) está al día con el código fuente
+    assert (ROOT / "mblock" / ("%s.py" % program)).read_text() == out.read_text(), \
+        "mblock/ desactualizado: python3 tools/scripts/bundle_for_mblock.py --all"
 
 
 def test_odometer_ignores_turns_in_place(sim):
@@ -471,3 +475,41 @@ def test_drive_keeps_steering_at_full_power(sim):
     left = sim.em[0] * cfg.LEFT_SIGN
     right = sim.em[1] * cfg.RIGHT_SIGN
     assert left == pytest.approx(100) and right == pytest.approx(92)
+
+
+# ---------------------------------------------------------------- programa manual (B empieza, A para)
+class _End(Exception):
+    pass
+
+
+def _load_program(name):
+    src = (ROOT / "software" / "robot" / (name + ".py")).read_text().rstrip()
+    assert src.endswith("main()")
+    ns = {"__name__": name}
+    exec(compile(src[:-len("main()")], name + ".py", "exec"), ns)
+    return ns
+
+
+def test_manual_program_starts_with_b_and_stops_with_a(monkeypatch):
+    ns = _load_program("rover_x_manual")
+    entered = []
+    real_step = manual.step
+    monkeypatch.setattr(manual, "step", lambda st: entered.append(world.t) or real_step(st))
+    # pasos de hal.wait: nada, B (empezar), soltar, manejando..., A (parar), soltar, otra vez B
+    script = [set()] * 5 + [{"b"}] + [set()] * 20 + [{"a"}] + [set()] * 5
+    it = iter(script)
+
+    def wait(s):
+        try:
+            world.pressed = set(next(it))
+        except StopIteration:
+            raise _End
+        world.t += s
+    monkeypatch.setattr(hal, "wait", wait)
+    world.pressed = set()
+    with pytest.raises(_End):
+        ns["main"]()
+    assert entered, "B no arrancó el control manual"
+    assert world.labels.get(1, "").startswith("B = empezar"), "A no volvió a la espera"
+    n = len(entered)
+    assert all(t <= entered[-1] for t in entered) and n < 25     # dejó de manejar al presionar A

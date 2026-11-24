@@ -2,7 +2,7 @@
 #
 # Ejecuta las misiones de missions.py desde el nivel de inicio elegido, muestra el avance
 # en la pantalla del CyberPi y se detiene si se acaba el tiempo, si falla una misión
-# crítica o si se presiona B (abortar para pedir reinicio).
+# crítica o si se presiona A (cfg.ABORT_BUTTON: parar para pedir reinicio).
 
 import hal
 import config as cfg
@@ -652,16 +652,16 @@ def detect_level():
 
 
 def choose_level(level=None):
-    """Pantalla de inicio. Joystick: elige el nivel (cfg.LEVEL_KEYS: arriba 1, abajo 2,
-    izquierda 3, derecha 4). START_BUTTON: arrancar el tramo. MANUAL_BUTTON: control manual.
-    Centro del joystick: menú de ajustes. Devuelve el nivel, 0 = ajustes, -1 = manual."""
+    """Pantalla de inicio del autónomo. Joystick: elige el nivel (cfg.LEVEL_KEYS: arriba 1,
+    abajo 2, izquierda 3, derecha 4). START_BUTTON (B): arrancar el tramo. Centro del joystick:
+    menú de ajustes. Devuelve el nivel, o 0 = ajustes."""
     if level is None:
         level = detect_level()
     hal.wait(0.3)
     while True:
         hal.show("Nivel %d" % level, line=0)
         hal.show("^1 v2 <3 >4  %s=GO" % cfg.START_BUTTON.upper(), line=1)
-        hal.show("%s=manual  centro=ajustes" % cfg.MANUAL_BUTTON.upper(), line=2)
+        hal.show("%s=parar  centro=ajustes" % cfg.ABORT_BUTTON.upper(), line=2)
         for key in cfg.LEVEL_KEYS:
             if hal.button(key):
                 level = cfg.LEVEL_KEYS[key]
@@ -671,8 +671,4 @@ def choose_level(level=None):
             return level
         if hal.button(cfg.MENU_BUTTON):
             return 0
-        if hal.button(cfg.MANUAL_BUTTON):
-            while hal.button(cfg.MANUAL_BUTTON):
-                hal.wait(0.02)
-            return -1
         hal.wait(0.02)
