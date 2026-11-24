@@ -88,11 +88,7 @@ class Sim:
         self.slope_k = 30.0                                            # cm/s perdidos por sen(pitch)
         self.spot = 0.35                                               # radio de lectura de una sonda (cm)
 
-        x, y, yaw = arena.start_pose(level)
-        if level == 2:      # igual que place(): el equipo pone las SONDAS sobre la T
-            back = (self.body["sensor_fwd"] - self.body["ref_rot_fwd"]) - 3.0
-            x -= back * math.cos(math.radians(yaw))
-            y -= back * math.sin(math.radians(yaw))
+        x, y, yaw = self._initial_pose(level)
         self.x, self.y, self.yaw = x, y, yaw
         self.vl = self.vr = 0.0
         self.z = arena.height(x, y)
@@ -116,8 +112,25 @@ class Sim:
         self.fallen = None
         self._sample_cache = {}
 
+        self._init_objects(level)
+        self.start_held = None
+        self.held = None
+        self._servos = {}
+        self.on_frame = None            # función llamada cada FRAME_S de tiempo simulado
+        self._next_frame = 0.0
+        self._install()
+
+    def _initial_pose(self, level):
+        x, y, yaw = self.arena.start_pose(level)
+        if level == 2:      # igual que place(): el equipo pone las SONDAS sobre la T
+            back = (self.body["sensor_fwd"] - self.body["ref_rot_fwd"]) - 3.0
+            x -= back * math.cos(math.radians(yaw))
+            y -= back * math.sin(math.radians(yaw))
+        return x, y, yaw
+
+    def _init_objects(self, level):
         # objetos móviles: pos (x, y, z del centro), estado
-        a = arena
+        a = self.arena
         p1 = a.props["pedestal1"][0]
         bp = a.props["ball_ped"][0]
         self.objects = {
@@ -139,12 +152,6 @@ class Sim:
                                         + ar.PEDESTAL_H + ar.CUBE_SIZE / 2, on="pedestal2")
         # al reiniciar en el nivel 4 se carga la pelota (misión 8 omitida por ahora)
         # la pelota (misiones 8 y 12) está omitida en la estrategia: no se arranca con ella
-        self.start_held = None
-        self.held = None
-        self._servos = {}
-        self.on_frame = None            # función llamada cada FRAME_S de tiempo simulado
-        self._next_frame = 0.0
-        self._install()
 
     # ------------------------------------------------------------ conexión con los fakes
     def _install(self):
@@ -286,6 +293,9 @@ class Sim:
             self.update_gripper()
         if self.held:
             self._carry()
+        self._objects_step()
+
+    def _objects_step(self):
         self._push_prism()
 
     def _move_to(self, x, y, yaw):
@@ -480,9 +490,19 @@ class Sim:
         return ar.rect_poly(x + c * mid - s * lat, y + s * mid + c * lat, math.radians(yaw), b["claw_tip"] + 2.0, 6.0)
 
     def claw_closed(self):
+        """Cerrada = el servo se movió más de 15° desde "abierta" HACIA "cerrar cubo" (abrir de
+        más no cuenta como cerrar)."""
+        return self.claw_open_frac() < 1.0 - 15.0 / max(1.0, abs(self.body["claw_open"]
+                                                               - self.body["claw_cube"]))
+
+    def claw_open_frac(self):
+        """Apertura de la garra: 1 = claw_open, 0 = claw_cube (puede pasarse de 0 o de 1)."""
         b = self.body
         ang = self.world.servos.get(self.cfg.SERVO_CLAW, b["claw_open"])
-        return abs(ang - b["claw_open"]) > 15
+        span = b["claw_open"] - b["claw_cube"]
+        if abs(span) < 1e-6:
+            return 1.0
+        return (ang - b["claw_cube"]) / span
 
     # ------------------------------------------------------------ choques
     def _blocked(self, x, y, yaw):

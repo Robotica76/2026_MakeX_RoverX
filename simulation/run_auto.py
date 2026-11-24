@@ -73,8 +73,10 @@ def geometry_warnings():
 def frame_of(sim, label):
     """Un cuadro de la reproducción (el visor lee estos índices)."""
     o = sim.objects
+    far = {"x": -50.0, "y": -50.0, "z": -10.0}
+    o = {"cube": o.get("cube", far), "ball": o.get("ball", far)}
     h, _ = sim.arm_h()
-    return [
+    fr = [
         round(world.t, 2), round(sim.x, 2), round(sim.y, 2), round(sim.yaw, 1),
         round(sim.z, 1), round(sim.pitch, 1), round(h, 1), 1 if sim.claw_closed() else 0,
         list(world.leds),
@@ -84,7 +86,12 @@ def frame_of(sim, label):
         label,
         [round(v, 1) for v in sim.claw_point()[:2]],
         round(world.servos.get(cfg.SERVO_ARM, 45), 1),      # 14: ángulo del servo del brazo
+        round(sim.claw_open_frac(), 2),                     # 15: apertura (1 abierta, 0 cerrada)
     ]
+    extra = getattr(sim, "frame_extra", None)               # 16+: arena manual (objetos, rampas)
+    if extra:
+        fr.extend(extra())
+    return fr
 
 
 RESTART_S = 15.0            # s que tarda el equipo en pedir el reinicio y recolocar el robot

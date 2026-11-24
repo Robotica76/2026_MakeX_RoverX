@@ -8,7 +8,7 @@
 #   Joystick izq. ↕ (Ly)  avanzar / retroceder      Joystick der. ↔ (Rx)  girar
 #   Cruceta               movimientos finos lentos (si los joysticks están en el centro)
 #   L1 / L2               brazo arriba / abajo (mantener)
-#   R1 / R2               garra abrir / cerrar (mantener)
+#   R1 / R2               garra abrir / cerrar (mantener; entre claw_open y claw_cube - 20°)
 #   N1                    modo rápido / preciso (LEDs azul / naranja)
 #   N2                    brazo a la altura de la barra (cubos MakeX)
 #   N3 (mantener)         escalera: recto con el giroscopio, potencia de escalera
@@ -73,6 +73,21 @@ def _heading_hold(f, t):
     return hal.clamp(cfg.P["head_kp"] * err, -25, 25)
 
 
+CLAW_SQUEEZE = 20.0                         # grados que se puede cerrar más allá de claw_cube
+
+
+def _claw_dir():
+    """+1 si abrir es subir el ángulo del servo (según la calibración claw_open / claw_cube)."""
+    return 1 if cfg.P["claw_open"] >= cfg.P["claw_cube"] else -1
+
+
+def _claw_limit(deg):
+    """La garra va de claw_open (abierta) a claw_cube + CLAW_SQUEEZE (apretando): abrir de más
+    o cerrar de más fuerza el servo contra el tope."""
+    shut = cfg.P["claw_cube"] - _claw_dir() * CLAW_SQUEEZE
+    return hal.clamp(deg, min(cfg.P["claw_open"], shut), max(cfg.P["claw_open"], shut))
+
+
 def _arm(deg):
     global arm_deg
     arm_deg = hal.clamp(deg, 0, 90)
@@ -101,9 +116,9 @@ def step(state):
     if _edge(state, "N4"):
         _arm(geo.arm_servo(cfg.P["h_top"]))
     if hal.pad_key("R1"):
-        claw = hal.clamp(claw + CLAW_RATE * DT, 0, 180)
+        claw = _claw_limit(claw + _claw_dir() * CLAW_RATE * DT)
     elif hal.pad_key("R2"):
-        claw = hal.clamp(claw - CLAW_RATE * DT, 0, 180)
+        claw = _claw_limit(claw - _claw_dir() * CLAW_RATE * DT)
     hal.servo(cfg.SERVO_ARM, arm_deg)
     hal.servo(cfg.SERVO_CLAW, claw)
 

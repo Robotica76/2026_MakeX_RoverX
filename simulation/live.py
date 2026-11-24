@@ -35,6 +35,8 @@ import physics
 import referee
 import viewer
 import userprog
+import manual_arena
+import manual_sim
 
 REAL_SLEEP = time.sleep
 
@@ -66,13 +68,19 @@ class Session:
         self.prog_name = prog_name or ""
         self.params = {"level": level, "seed": seed, "noise": noise, "line_w": line_w,
                        "mode": self.mode, "program": self.prog_name}
-        self.arena = ar.Arena(line_w=line_w, seed=seed)
         self.log = []
-        self.sim = physics.Sim(world, cfg, geo, self.arena, level=level, noise=noise, seed=seed,
-                               log=self.log)
+        if self.mode == "manual":           # misiones de alianza: la arena MANUAL del reglamento
+            self.arena = manual_arena.ManualArena(seed=seed)
+            self.sim = manual_sim.ManualSim(world, cfg, geo, self.arena, level=level, noise=noise,
+                                            seed=seed, log=self.log)
+            self.ref = manual_sim.ManualReferee(self.sim)
+        else:
+            self.arena = ar.Arena(line_w=line_w, seed=seed)
+            self.sim = physics.Sim(world, cfg, geo, self.arena, level=level, noise=noise,
+                                   seed=seed, log=self.log)
+            self.ref = referee.Referee(self.sim, ms.MISSIONS, level)
         self.sim.restarts = []
         self.sim.falls = 0
-        self.ref = referee.Referee(self.sim, ms.MISSIONS, level)
         self.frames = []
         self.label = ""
         self.lock = threading.Lock()
@@ -152,6 +160,11 @@ class Session:
         with self.lock:
             want = "place" in self.pending
         if not want:
+            return
+        if self.mode == "manual":          # sin menú: va directo a la zona marcada
+            with self.lock:
+                self.pending.remove("place")
+            self.place(self.level)
             return
         lvl = self.screen_level()
         if lvl is not None:
@@ -321,7 +334,7 @@ class Session:
             "params": dict(self.params, prog={}, true={}, cards=self.arena.card_colors,
                            ramp_deg=None),
             "missions": [{"id": m["id"], "name": m["name"], "pts": m["pts"], "level": m["level"]}
-                         for m in ms.MISSIONS],
+                         for m in (manual_sim.MISSIONS if self.mode == "manual" else ms.MISSIONS)],
         }
 
 
