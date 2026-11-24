@@ -139,6 +139,22 @@ oruga que patina desplaza el robot sin que los encoders lo vean.
 - `CORRIDOR_DIAG_X`, `RAMP2_X`, `RAMP2_LINE_X`
 - `skid` en `config.py`: define el radio del pivote, 11.9 cm
 
-**Pendiente, nivel 4:** el rodeo de la torre todavía roza la orilla de la arena. Entre la torre y la
-orilla hay 25.5 cm, y al girar al oeste la nariz sale unos 5 cm. Hay que rediseñarlo.
-El simulador lo marca como choque ("orilla de la arena") pero sin frenar al robot.
+**Pendiente, nivel 4 (rodear la torre): no cabe con el mapa actual.** Con el robot medido y el
+plano reconstruido:
+- Entre la cara sur de la torre y la orilla de la arena hay **25.5 cm** para 21.35 de robot.
+- Entre la cara este de la torre y el escalón de 20 cm del nivel 3 (al sur de la escalera) hay
+  solo **20.2 cm**: el robot (20.3 × 21.35) apenas cabe y ningún giro en el lugar entra (barre 16 cm).
+
+Se buscó la maniobra en el espacio (x, y, rumbo) del robot con giros en el lugar, pivotes y rectas:
+- Con 0.8 cm de margen a la torre y a la orilla **no hay solución** de pocos movimientos.
+- La mejor (girar en la cima a 110°, avanzar 8 cm, pivotear al oeste sobre la oruga derecha,
+  18 cm al oeste, pivotear al norte) deja **0.43 cm** a la torre y saca una esquina 3.8 cm sobre el
+  escalón. Con 1 cm de error al llegar o el radio de pivote 1.4 cm distinto ya choca: en el
+  simulador con ruido bajó M10 a 25 % (arrancando en el nivel 4), así que **no se usó**.
+- El rodeo actual sigue pasando: no toca la torre, pero la nariz sale ~5 cm de la orilla de la
+  arena al girar al oeste. El simulador lo marca como choque ("orilla de la arena") sin frenar.
+
+**Para decidir con el equipo:** medir en la pista real la torre, la escalera, la zona verde y la
+orilla del nivel 4 (el plano sale de una imagen y unos centímetros cambian todo), y ver si la
+orilla tiene valla (un roce) o es un borde abierto (riesgo de caída). Si las medidas confirman el
+plano, las opciones son omitir M10–M13 (320 pts) o un robot más angosto en ese tramo.
