@@ -27,6 +27,7 @@ BODY_H = 12.0                   # alto del chasis que empuja (cm)
 BODY_PUSH_H = 6.0               # altura a la que empuja el frente (orugas): no voltea un cilindro
 TIP_SPEED = 28.0                # cm/s: un golpe más rápido voltea un cilindro parado
 TIP_FRAC = 0.6                  # contacto arriba de esta fracción de la altura -> se voltea
+PALM_SLIDE_SPEED = 30.0         # cm/s: más rápido, la palma tira el objeto del pedestal
 GRIP_MIN_GAP = 4.6              # separación de los dedos con la garra en claw_cube (cm)
 
 
@@ -289,6 +290,16 @@ class ManualSim(physics.Sim):
             by_claw = lo < cz + 3.0 and hi > cz - 3.0 and ar.polys_overlap(cpo, P)
             cp_hit = cpo
             if not (by_body or by_claw):
+                continue
+            # un objeto sobre un pedestal o en la barra tiene fricción: la palma lo TOCA y el robot
+            # se detiene ahí (listo para cerrar la garra); solo un golpe rápido lo tira
+            if (by_claw and not by_body and cpo is palm and abs(v) < PALM_SLIDE_SPEED
+                    and str(o.get("on", "")).startswith(("pedestal", "barra"))):
+                ok = False
+                if commit is False and self.world.t - self._stuck_logged > 1.5:
+                    self._stuck_logged = self.world.t
+                    self.log.append((self.world.t, "la garra toca %s: ciérrala para tomarlo"
+                                     % self._name(name)))
                 continue
             dx, dy = o["x"] - rx, o["y"] - ry
             n = math.hypot(dx, dy) or 1.0
