@@ -1,12 +1,16 @@
-# Rover X 2026: configuración del robot (mBot2 + orugas + garra de dos servos).
+## @file config.py
+#  @brief Configuración del robot (mBot2 + orugas + garra de dos servos): puertos, signos y
+#  parámetros ajustables cfg.P.
+#  @details Dos tipos de valores:
+#    - Constantes fijas (puertos, nombres de sondas): variables normales en MAYÚSCULAS.
+#    - Parámetros ajustables en pista: diccionario P. Se cambian desde el menú del CyberPi
+#      (software/core/settings.py), se guardan en el robot y se leen como cfg.P["clave"].
 #
-# Dos tipos de valores:
-#   - Constantes fijas (puertos, nombres de sondas): variables normales en MAYÚSCULAS.
-#   - Parámetros ajustables en pista: diccionario P. Se cambian desde el menú del CyberPi
-#     (software/core/settings.py), se guardan en el robot y se leen como cfg.P["clave"].
-#
-# Todas las distancias van en cm y los ángulos en grados. Lo marcado MEDIR sale del robot
-# real (ver docs/geometria.md); lo marcado CALIBRAR sale de tools/robot/api_check.py.
+#  Todas las distancias van en cm y los ángulos en grados. Lo marcado MEDIR sale del robot
+#  real (ver docs/geometria.md); lo marcado CALIBRAR sale de tools/robot/api_check.py.
+#  Las MEDIDAS DE LA PISTA (por nivel) están en software/core/pista.py.
+
+import pista
 
 # ---------------------------------------------------------------- puertos (fijos)
 LINE_SENSOR = 1          # índice del Quad RGB (mbuild)
@@ -157,16 +161,15 @@ P = {
                              # pitch, cola aún en el piso) y el cubo pasaba a 1.8 cm de la rampa
                              # (0.4 cm con una rampa 20 % más empinada). Con 10.5: 4.0 / 2.8 cm.
 
-    # --- medidas de la PISTA (MEDIR en la pista de prueba; sin ultrasónico son la referencia)
-    # TODO(medir en pista): valores sacados del plano del reglamento (simulation/arena.py)
-    "ped1_from_cross": 12.4, # TODO(pista) nivel 1: de donde las sondas VEN el cruce (su orilla cercana) al centro del pedestal
-    "ped2_from_cross": 11.1, # nivel 2: del cruce antes del pedestal al centro del pedestal
-    "ball_ped_dist": 23.6,   # nivel 3: del centro de la línea (en la marca roja) al centro del pedestal
-    "tower_from_edge": 7.5,  # nivel 4: del borde de salida de la zona verde a la cara de la torre
-    "tower_size": 10.0,
-    "side_margin": 2.0,      # holgura al rodear (con 4 cm el robot volvía sobre una tarjeta)
-    "bar_side": 1,           # -1 = barra de pelotas a la izquierda de la línea, 1 = derecha
-    "bar_reach": 8.2,        # avance desde la línea para dejar la garra sobre el agujero
+    # --- medidas de la PISTA que se pueden ajustar desde el menú (grupo "Pista").
+    # Sus valores se cambian en software/core/pista.py (ahí están explicadas, por nivel).
+    "ped1_from_cross": pista.nivel_1_cruce_a_pedestal_cm,
+    "ball_ped_dist": pista.nivel_3_pelota_linea_a_pedestal_cm,
+    "tower_from_edge": pista.nivel_4_zona_verde_a_torre_cm,
+    "tower_size": pista.nivel_4_torre_lado_cm,
+    "side_margin": pista.nivel_4_holgura_torre_cm,
+    "bar_side": pista.nivel_4_barra_lado,
+    "bar_reach": pista.nivel_4_barra_avance_cm,
 
     # --- colores
     "color_mode": 0,         # 0 = nombre del sensor (get_color_sta), 1 = RGB más cercano
@@ -194,7 +197,7 @@ TUNE = [
     ("Movimiento", "v_stairs", 5, 10, 100), ("Movimiento", "v_turn_min", 1, 5, 60),
     ("Movimiento", "turn_kp", 0.1, 0.1, 5),
     ("Movimiento", "tip_slew", 10, 20, 400), ("Brazo", "h_climb", 0.5, 0, 30), ("Movimiento", "head_kp", 0.1, 0, 5),
-    ("Pista", "ped1_from_cross", 0.5, 0, 60), ("Pista", "ped2_from_cross", 0.5, 0, 60),
+    ("Pista", "ped1_from_cross", 0.5, 0, 60),
     ("Pista", "ball_ped_dist", 0.5, 0, 60), ("Pista", "tower_from_edge", 0.5, 0, 100),
     ("Pista", "side_margin", 0.5, 0, 15), ("Pista", "bar_side", 2, -1, 1),
     ("Pista", "bar_reach", 0.5, 0, 30),

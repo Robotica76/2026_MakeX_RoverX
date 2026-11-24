@@ -1,5 +1,5 @@
 # rover_x_auto.py bundled for mBlock with tools/scripts/bundle_for_mblock.py (generated:
-# edit the source files and bundle again). Modules: config.py, geometry.py, hal.py, colors.py, motion.py, linefollow.py, gripper.py, missions.py, odometry.py, autonomous.py, settings.py
+# edit the source files and bundle again). Modules: pista.py, config.py, geometry.py, hal.py, colors.py, motion.py, linefollow.py, gripper.py, missions.py, odometry.py, autonomous.py, settings.py
 import time
 import cyberpi
 import mbot2
@@ -7,6 +7,74 @@ import mbuild
 import math
 import json
 
+# ---- software/core/pista.py ----
+pista_nivel_1_inicio_x = 12.6
+pista_nivel_1_inicio_y = 12.9
+pista_nivel_1_inicio_a_linea_inferior_cm = 33.8
+pista_nivel_1_linea_inferior_y = 43.2
+pista_nivel_1_cruce_a_cruce_del_cubo_cm = 59.0
+pista_nivel_1_cruce_a_pedestal_cm = 12.4
+pista_nivel_1_linea_del_cubo_y = 49.0
+pista_nivel_1_cubo_a_linea_de_rampa_cm = 18.4
+pista_nivel_1_linea_a_pie_de_rampa_cm = 18.7
+pista_nivel_1_x_de_bajada = 15.4
+pista_nivel_1_y_hacia_cubo = 47.4
+pista_nivel_1_holgura_cruce_cm = 6.0
+pista_nivel_1_retroceso_antes_de_girar_cm = 1.5
+pista_nivel_1_retroceso_para_pivotear_cm = 11.0
+pista_nivel_1_retroceso_tras_cubo_cm = 4.5
+pista_nivel_2_t_a_pedestal_cm = 8.8
+pista_nivel_2_colocado_x = 131.9
+pista_nivel_2_colocado_y = 30.4
+pista_nivel_2_tras_dejar_cubo_x = 133.9
+pista_nivel_2_tras_dejar_cubo_y = 26.8
+pista_nivel_2_giro_al_pasillo_x = 134.2
+pista_nivel_2_giro_al_pasillo_y = 43.5
+pista_nivel_2_abertura_izquierda_y = 45.0
+pista_nivel_2_abertura_derecha_y = 15.9
+pista_nivel_2_diagonal_punto_x = 212.7
+pista_nivel_2_diagonal_punto_y = 16.0
+pista_nivel_2_diagonal_deteccion_x = 208.96
+pista_nivel_2_diagonal_deteccion_y = 17.82
+pista_nivel_2_x_al_ver_diagonal = 218.6
+pista_nivel_2_rampa_centro_x = 228.15
+pista_nivel_2_rampa_linea_x = 228.6
+pista_nivel_2_retroceso_en_t_cm = 3.0
+pista_nivel_2_retroceso_tras_dejar_cubo_cm = 6.0
+pista_nivel_2_diagonal_rumbo = -26.0
+pista_nivel_2_diagonal_inicio_x = 150.5
+pista_nivel_2_diagonal_max_cm = 110.0
+pista_nivel_2_diagonal_vel = 14
+pista_nivel_2_diagonal_kp = 2.5
+pista_nivel_2_x_giro_salida = 223.0
+pista_nivel_2_rumbo_hacia_rampa = 60
+pista_nivel_2_avance_hacia_rampa_cm = 5.5
+pista_nivel_2_rampa_retroceso_cm = 8.0
+pista_nivel_3_zona_azul_a_dentro_cm = 19.2
+pista_nivel_3_orilla_zona_azul_x = 228.8
+pista_nivel_3_orilla_zona_azul_y = 70.8
+pista_nivel_3_orilla_a_prisma_cm = 3.6
+pista_nivel_3_rumbo_a_zona_punteada = 107
+pista_nivel_3_prisma_a_zona_punteada_cm = 22.0
+pista_nivel_3_frente_escalera_x = 166.1
+pista_nivel_3_frente_escalera_y = 96.4
+pista_nivel_3_retroceso_antes_de_bajar_garra_cm = 4.0
+pista_nivel_3_avance_para_tomar_prisma_cm = 6.5
+pista_nivel_3_retroceso_tras_soltar_cm = 8.0
+pista_nivel_3_retroceso_antes_de_escalera_cm = 5.0
+pista_nivel_3_pelota_linea_a_pedestal_cm = 23.6
+pista_nivel_3_pelota_rumbo = 113
+pista_nivel_3_pelota_rumbo_de_regreso = -152
+pista_nivel_4_escalera_a_dentro_cm = 8.0
+pista_nivel_4_torre_lado_cm = 10.0
+pista_nivel_4_zona_verde_a_torre_cm = 7.5
+pista_nivel_4_pasar_torre_al_oeste_cm = 37.0
+pista_nivel_4_retroceso_para_tarjetas_cm = 7.0
+pista_nivel_4_holgura_torre_cm = 2.0
+pista_nivel_4_rodeo_rumbo = 110
+pista_nivel_4_rodeo_cm = 20.0
+pista_nivel_4_barra_lado = 1
+pista_nivel_4_barra_avance_cm = 8.2
 # ---- software/core/config.py ----
 config_LINE_SENSOR = 1
 config_HAS_US = False
@@ -23,8 +91,8 @@ config_LINE_SIGN = 1
 config_PAD_Y_SIGN = 1
 config_LINE_BIT = {'L2': 8, 'L1': 4, 'R1': 2, 'R2': 1}
 config_LOOP_DT = 0.01
-config_P = {'ref_rot_fwd': 4.5, 'track_c': 12.1, 'track_d': 4.85, 'nose_deg': 45.0, 'wheel_d': 3.95, 'belt_t': 0.4, 'belt_w': 3.0, 'robot_w': 21.35, 'sensor_fwd': 9.7, 'probe_pitch': 1.25, 'probe_outer': 2.4, 'card_probe_fwd': 9.7, 'sprocket_d': 4.18, 'gyro_scale': 1.0, 'lr_ratio': 0.977, 'skid': 1.3, 'slip_tol': 0.05, 'track_max': 15.0, 'track_k': 4.0, 'slip': 1.0, 'arm_h0': 8.5, 'arm_x0': 8.0, 'arm_h45': 14.5, 'arm_x45': 6.0, 'arm_h90': 23.0, 'arm_x90': 0.0, 'arm_pivot_fwd': 10.0, 'arm_pivot_h': 12.2, 'arm_ground': 5.0, 'arm_ground_dx': 0.7, 'arm_crank': 7.2, 'arm_rocker': 5.75, 'arm_coupler': 7.0, 'arm_claw_u': 1.9, 'arm_claw_v': 7.9, 'claw_tip': 3.0, 'h_floor': 8.5, 'h_pedestal': 12.5, 'h_carry': 17.5, 'h_bar': 12.0, 'h_prism': 8.5, 'claw_open': 90, 'claw_cube': 35, 'claw_ball': 45, 'com_fwd': -1.0, 'com_h': 6.5, 'arm_mass': 0.15, 'arm_w': 4.9, 'arm_lat': -0.75, 'claw_open_w': 9.0, 'line_mode': 1, 'dark_th': 0.45, 'cross_win': 4.0, 'cross_th': 0.8, 'kp': 0.45, 'kd': 1.5, 'ki': 0.0, 'lost_s': 0.6, 'green': 0, 'v_line': 45, 'v_slow': 25, 'v_straight': 45, 'v_turn_max': 45, 'v_turn_min': 18, 'v_ramp': 70, 'v_stairs': 100, 'v_push': 30, 'turn_kp': 1.0, 'turn_tol': 2.5, 'head_kp': 1.2, 'pitch_ramp': 10, 'pitch_flat': 4, 'ramp_margin': 3.0, 'tip_pitch': 8, 'tip_slew': 120, 'slope_min_v': 4.0, 'slope_boost': 60, 'h_top': 23.0, 'h_climb': 10.5, 'ped1_from_cross': 12.4, 'ped2_from_cross': 11.1, 'ball_ped_dist': 23.6, 'tower_from_edge': 7.5, 'tower_size': 10.0, 'side_margin': 2.0, 'bar_side': 1, 'bar_reach': 8.2, 'color_mode': 0}
-config_TUNE = [('Linea', 'kp', 0.05, 0, 3), ('Linea', 'kd', 0.1, 0, 10), ('Linea', 'v_line', 5, 10, 100), ('Linea', 'dark_th', 0.05, 0.1, 0.9), ('Linea', 'cross_win', 0.5, 1, 15), ('Linea', 'cross_th', 0.05, 0.3, 1), ('Linea', 'line_mode', 1, 0, 1), ('Linea', 'green', 1, 0, 1), ('Geometria', 'ref_rot_fwd', 0.5, -20, 20), ('Geometria', 'sensor_fwd', 0.5, -10, 40), ('Geometria', 'card_probe_fwd', 0.5, -10, 40), ('Geometria', 'track_c', 0.5, 5, 40), ('Geometria', 'belt_w', 0.5, 1, 10), ('Geometria', 'robot_w', 0.5, 10, 40), ('Geometria', 'sprocket_d', 0.02, 2, 10), ('Geometria', 'lr_ratio', 0.005, 0.9, 1.1), ('Geometria', 'gyro_scale', 0.01, 0.5, 2), ('Geometria', 'slip', 0.02, 0.5, 1.5), ('Brazo', 'arm_h0', 0.5, 0, 40), ('Brazo', 'arm_x0', 0.5, -20, 30), ('Brazo', 'arm_h45', 0.5, 0, 40), ('Brazo', 'arm_x45', 0.5, -20, 30), ('Brazo', 'arm_h90', 0.5, 0, 40), ('Brazo', 'arm_x90', 0.5, -20, 30), ('Brazo', 'h_pedestal', 0.5, 0, 30), ('Brazo', 'h_carry', 0.5, 0, 30), ('Brazo', 'h_bar', 0.5, 0, 30), ('Brazo', 'h_prism', 0.5, 0, 30), ('Brazo', 'h_floor', 0.5, 0, 30), ('Garra', 'claw_open', 2, 0, 180), ('Garra', 'claw_cube', 2, 0, 180), ('Garra', 'claw_ball', 2, 0, 180), ('Movimiento', 'v_slow', 5, 10, 100), ('Movimiento', 'v_ramp', 5, 10, 100), ('Movimiento', 'v_stairs', 5, 10, 100), ('Movimiento', 'v_turn_min', 1, 5, 60), ('Movimiento', 'turn_kp', 0.1, 0.1, 5), ('Movimiento', 'tip_slew', 10, 20, 400), ('Brazo', 'h_climb', 0.5, 0, 30), ('Movimiento', 'head_kp', 0.1, 0, 5), ('Pista', 'ped1_from_cross', 0.5, 0, 60), ('Pista', 'ped2_from_cross', 0.5, 0, 60), ('Pista', 'ball_ped_dist', 0.5, 0, 60), ('Pista', 'tower_from_edge', 0.5, 0, 100), ('Pista', 'side_margin', 0.5, 0, 15), ('Pista', 'bar_side', 2, -1, 1), ('Pista', 'bar_reach', 0.5, 0, 30)]
+config_P = {'ref_rot_fwd': 4.5, 'track_c': 12.1, 'track_d': 4.85, 'nose_deg': 45.0, 'wheel_d': 3.95, 'belt_t': 0.4, 'belt_w': 3.0, 'robot_w': 21.35, 'sensor_fwd': 9.7, 'probe_pitch': 1.25, 'probe_outer': 2.4, 'card_probe_fwd': 9.7, 'sprocket_d': 4.18, 'gyro_scale': 1.0, 'lr_ratio': 0.977, 'skid': 1.3, 'slip_tol': 0.05, 'track_max': 15.0, 'track_k': 4.0, 'slip': 1.0, 'arm_h0': 8.5, 'arm_x0': 8.0, 'arm_h45': 14.5, 'arm_x45': 6.0, 'arm_h90': 23.0, 'arm_x90': 0.0, 'arm_pivot_fwd': 10.0, 'arm_pivot_h': 12.2, 'arm_ground': 5.0, 'arm_ground_dx': 0.7, 'arm_crank': 7.2, 'arm_rocker': 5.75, 'arm_coupler': 7.0, 'arm_claw_u': 1.9, 'arm_claw_v': 7.9, 'claw_tip': 3.0, 'h_floor': 8.5, 'h_pedestal': 12.5, 'h_carry': 17.5, 'h_bar': 12.0, 'h_prism': 8.5, 'claw_open': 90, 'claw_cube': 35, 'claw_ball': 45, 'com_fwd': -1.0, 'com_h': 6.5, 'arm_mass': 0.15, 'arm_w': 4.9, 'arm_lat': -0.75, 'claw_open_w': 9.0, 'line_mode': 1, 'dark_th': 0.45, 'cross_win': 4.0, 'cross_th': 0.8, 'kp': 0.45, 'kd': 1.5, 'ki': 0.0, 'lost_s': 0.6, 'green': 0, 'v_line': 45, 'v_slow': 25, 'v_straight': 45, 'v_turn_max': 45, 'v_turn_min': 18, 'v_ramp': 70, 'v_stairs': 100, 'v_push': 30, 'turn_kp': 1.0, 'turn_tol': 2.5, 'head_kp': 1.2, 'pitch_ramp': 10, 'pitch_flat': 4, 'ramp_margin': 3.0, 'tip_pitch': 8, 'tip_slew': 120, 'slope_min_v': 4.0, 'slope_boost': 60, 'h_top': 23.0, 'h_climb': 10.5, 'ped1_from_cross': pista_nivel_1_cruce_a_pedestal_cm, 'ball_ped_dist': pista_nivel_3_pelota_linea_a_pedestal_cm, 'tower_from_edge': pista_nivel_4_zona_verde_a_torre_cm, 'tower_size': pista_nivel_4_torre_lado_cm, 'side_margin': pista_nivel_4_holgura_torre_cm, 'bar_side': pista_nivel_4_barra_lado, 'bar_reach': pista_nivel_4_barra_avance_cm, 'color_mode': 0}
+config_TUNE = [('Linea', 'kp', 0.05, 0, 3), ('Linea', 'kd', 0.1, 0, 10), ('Linea', 'v_line', 5, 10, 100), ('Linea', 'dark_th', 0.05, 0.1, 0.9), ('Linea', 'cross_win', 0.5, 1, 15), ('Linea', 'cross_th', 0.05, 0.3, 1), ('Linea', 'line_mode', 1, 0, 1), ('Linea', 'green', 1, 0, 1), ('Geometria', 'ref_rot_fwd', 0.5, -20, 20), ('Geometria', 'sensor_fwd', 0.5, -10, 40), ('Geometria', 'card_probe_fwd', 0.5, -10, 40), ('Geometria', 'track_c', 0.5, 5, 40), ('Geometria', 'belt_w', 0.5, 1, 10), ('Geometria', 'robot_w', 0.5, 10, 40), ('Geometria', 'sprocket_d', 0.02, 2, 10), ('Geometria', 'lr_ratio', 0.005, 0.9, 1.1), ('Geometria', 'gyro_scale', 0.01, 0.5, 2), ('Geometria', 'slip', 0.02, 0.5, 1.5), ('Brazo', 'arm_h0', 0.5, 0, 40), ('Brazo', 'arm_x0', 0.5, -20, 30), ('Brazo', 'arm_h45', 0.5, 0, 40), ('Brazo', 'arm_x45', 0.5, -20, 30), ('Brazo', 'arm_h90', 0.5, 0, 40), ('Brazo', 'arm_x90', 0.5, -20, 30), ('Brazo', 'h_pedestal', 0.5, 0, 30), ('Brazo', 'h_carry', 0.5, 0, 30), ('Brazo', 'h_bar', 0.5, 0, 30), ('Brazo', 'h_prism', 0.5, 0, 30), ('Brazo', 'h_floor', 0.5, 0, 30), ('Garra', 'claw_open', 2, 0, 180), ('Garra', 'claw_cube', 2, 0, 180), ('Garra', 'claw_ball', 2, 0, 180), ('Movimiento', 'v_slow', 5, 10, 100), ('Movimiento', 'v_ramp', 5, 10, 100), ('Movimiento', 'v_stairs', 5, 10, 100), ('Movimiento', 'v_turn_min', 1, 5, 60), ('Movimiento', 'turn_kp', 0.1, 0.1, 5), ('Movimiento', 'tip_slew', 10, 20, 400), ('Brazo', 'h_climb', 0.5, 0, 30), ('Movimiento', 'head_kp', 0.1, 0, 5), ('Pista', 'ped1_from_cross', 0.5, 0, 60), ('Pista', 'ball_ped_dist', 0.5, 0, 60), ('Pista', 'tower_from_edge', 0.5, 0, 100), ('Pista', 'side_margin', 0.5, 0, 15), ('Pista', 'bar_side', 2, -1, 1), ('Pista', 'bar_reach', 0.5, 0, 30)]
 config_LINE_CAL = {'L2': [90, 10], 'L1': [90, 10], 'R1': [90, 10], 'R2': [90, 10]}
 config_COLOR_REF = {'black': (20, 20, 20), 'white': (230, 230, 230), 'red': (200, 40, 40), 'yellow': (220, 200, 50), 'green': (40, 160, 70), 'blue': (40, 90, 200), 'cyan': (60, 180, 200), 'purple': (140, 60, 170)}
 config_COLOR_CONFIRM = 3
@@ -58,42 +126,30 @@ config_PAD_TURN_GAIN = 0.8
 def geometry_p(key):
     return config_P[key]
 def geometry_fwd(key):
-    """Distancia hacia adelante desde el CENTRO DE GIRO de un punto medido desde la referencia."""
     return geometry_p(key) - geometry_p('ref_rot_fwd')
 def geometry_track_w():
-    """Distancia entre los centros de las dos orugas."""
     return geometry_p('robot_w') - geometry_p('belt_w')
 def geometry_contact_half():
-    """Del centro de giro a cada extremo del tramo apoyado (eje blanco / eje 1a negra)."""
     return geometry_p('track_c') / 2.0
 def geometry_nose_fwd():
-    """Del centro de giro al eje de la rueda de la nariz (horizontal)."""
     return geometry_contact_half() + geometry_p('track_d') * math.cos(math.radians(geometry_p('nose_deg')))
 def geometry_nose_h():
-    """Altura del eje de la nariz sobre los ejes apoyados (cm)."""
     return geometry_p('track_d') * math.sin(math.radians(geometry_p('nose_deg')))
 def geometry_rear_len():
-    """Del centro de giro a la parte trasera (punta trasera de las orugas)."""
     return geometry_contact_half() + geometry_p('wheel_d') / 2.0 + geometry_p('belt_t')
 def geometry_track_front():
-    """Del centro de giro a la punta delantera de las orugas (la nariz)."""
     return geometry_nose_fwd() + geometry_p('wheel_d') / 2.0 + geometry_p('belt_t')
 def geometry_track_len():
-    """Largo de la oruga de punta a punta, visto desde arriba."""
     return geometry_rear_len() + geometry_track_front()
 def geometry_front_len():
-    """Del centro de giro a lo más adelantado del robot (oruga o garra en posición de viaje)."""
     claw = geometry_claw_reach(geometry_p('h_carry')) + geometry_p('claw_tip')
     track = geometry_track_front()
     return claw if claw > track else track
 def geometry_robot_len():
     return geometry_rear_len() + geometry_front_len()
 def geometry_cm_per_deg():
-    """cm que avanza la oruga por grado de encoder."""
     return math.pi * geometry_p('sprocket_d') / 360.0 * geometry_p('slip')
 def geometry_cm_per_deg_lr():
-    """(izquierda, derecha): cm por grado de cada oruga. No avanzan igual por grado (prueba de
-    1 m: 63.5 y 65); su promedio es cm_per_deg()."""
     k = geometry_cm_per_deg()
     r = geometry_p('lr_ratio')
     return (k * 2.0 * r / (1.0 + r), k * 2.0 / (1.0 + r))
@@ -101,7 +157,6 @@ geometry_ARM_ANGLES = (0, 45, 90)
 def geometry__arm_rows():
     return ((0, geometry_p('arm_h0'), geometry_p('arm_x0')), (45, geometry_p('arm_h45'), geometry_p('arm_x45')), (90, geometry_p('arm_h90'), geometry_p('arm_x90')))
 def geometry_arm_at(servo):
-    """(altura de la garra sobre el piso, cm delante de la nariz) con el servo a ese ángulo."""
     rows = geometry__arm_rows()
     if servo <= rows[0][0]:
         return (rows[0][1], rows[0][2])
@@ -113,7 +168,6 @@ def geometry_arm_at(servo):
             return (h0 + f * (h1 - h0), x0 + f * (x1 - x0))
     return (rows[-1][1], rows[-1][2])
 def geometry_arm_servo(h):
-    """Ángulo del servo del brazo para la altura h (cm sobre el piso); fuera del alcance, el tope."""
     rows = geometry__arm_rows()
     if h <= rows[0][1]:
         return rows[0][0]
@@ -124,46 +178,29 @@ def geometry_arm_servo(h):
             return a0 + (h - h0) / (h1 - h0) * (a1 - a0)
     return rows[-1][0]
 def geometry_claw_reach(h):
-    """Distancia horizontal del centro de giro al centro de la garra, con la garra a la altura h."""
     return geometry_track_front() + geometry_arm_at(geometry_arm_servo(h))[1]
 def geometry_turn_advance():
-    """Lo que hay que avanzar tras detectar un cruce con las sondas para girar SOBRE él."""
     return geometry_fwd('sensor_fwd')
 def geometry_reach_advance(target, h):
-    """Avance para que el punto de agarre (garra a la altura h) llegue a un objeto cuyo centro
-    está a `target` cm del centro de giro, en la dirección en la que mira el robot."""
     return target - geometry_claw_reach(h)
 def geometry_pedestal_advance(h, from_cross, traveled):
-    """Sin ultrasónico: avance para dejar la garra sobre el centro de un pedestal que está a
-    `from_cross` cm de un cruce, cuando el robot ya avanzó `traveled` cm desde que las sondas
-    detectaron ese cruce (en ese momento el centro de giro estaba sensor_fwd atrás)."""
     return from_cross - geometry_claw_reach(h) + geometry_fwd('sensor_fwd') - traveled
 def geometry_tower_advance(traveled):
-    """Avance (siguiendo la línea) hasta quedar a side_margin de la torre, medido desde que las
-    sondas salieron de la zona verde y ya se avanzaron `traveled` cm."""
     return geometry_p('tower_from_edge') - geometry_front_len() - geometry_p('side_margin') + geometry_fwd('sensor_fwd') - traveled
 def geometry_ramp_extra():
-    """Avance después de quedar plano arriba de una rampa para estar completamente dentro."""
     return geometry_rear_len() + geometry_p('ramp_margin')
 def geometry_zone_extra():
-    """Avance desde que las sondas entran a una zona hasta que todo el robot está dentro."""
     return geometry_fwd('sensor_fwd') + geometry_rear_len() + geometry_p('ramp_margin')
 def geometry_detour_out():
-    """Desplazamiento lateral para rodear la torre sin tocarla."""
     return geometry_p('robot_w') / 2.0 + geometry_p('tower_size') / 2.0 + geometry_p('side_margin')
 def geometry_detour_pass():
-    """Avance paralelo para rebasar la torre por completo, partiendo de side_margin antes de ella."""
     return geometry_front_len() + geometry_p('tower_size') + geometry_rear_len() + 2 * geometry_p('side_margin')
 def geometry_card_to_center(card_odo, now_odo):
-    """Cuánto moverse (cm, negativo = atrás) para dejar el centro de giro frente a una tarjeta
-    detectada cuando la odometría marcaba card_odo."""
     return card_odo + geometry_fwd('card_probe_fwd') - now_odo
 def geometry_probe_x(probe):
-    """Posición lateral de cada sonda (cm, negativo = izquierda)."""
     i = config_PROBES.index(probe)
     return geometry_probe_lat(i, geometry_p('probe_pitch'), geometry_p('probe_outer'))
 def geometry_probe_lat(i, pitch, outer):
-    """Sonda i (0..3, de izquierda a derecha) -> cm laterales (no están igual de separadas)."""
     inner = pitch / 2.0
     return (-inner - outer, -inner, inner, inner + outer)[i]
 # ---- software/core/hal.py ----
@@ -202,12 +239,6 @@ hal__last_t = 0.0
 hal__boost = 0.0
 hal__last_odo = 0.0
 def hal__tip_guard(left, right):
-    """Control contra volcadura. Inclinado (rampa, escalera), un arranque brusco empuja el centro
-    de masa detrás de la punta de las orugas y el robot se voltea hacia atrás: la potencia solo
-    puede SUBIR tip_slew %/s. Bajar la potencia siempre está permitido.
-
-    No se recorta la potencia en pendientes fuertes: en una rampa de 40° eso dejaba al robot sin
-    fuerza a media subida (lo mostró el simulador). El otro control es el brazo (gripper.climb_pose)."""
     global hal__last_t
     t = hal_now()
     dt = t - hal__last_t
@@ -254,26 +285,18 @@ def hal_stop():
     hal__last_cmd[1] = 0.0
     mbot2.drive_power(0, 0)
 def hal__encoder_deg():
-    """Avance del robot en grados de encoder, CON signo (adelante +, atrás -).
-
-    Es el promedio de las dos orugas con su signo, así que un giro en el lugar no suma
-    (antes se usaba abs() y los giros cambiaban la odometría, lo que movía las distancias
-    medidas desde un cruce o una tarjeta)."""
     a = config_LEFT_SIGN * mbot2.EM_get_angle('EM1')
     b = config_RIGHT_SIGN * mbot2.EM_get_angle('EM2')
     return (a + b) / 2
 def hal_tracks_cm():
-    """(izquierda, derecha): avance de cada oruga en cm desde el arranque, con signo."""
     (kl, kr) = geometry_cm_per_deg_lr()
     return (config_LEFT_SIGN * mbot2.EM_get_angle('EM1') * kl, config_RIGHT_SIGN * mbot2.EM_get_angle('EM2') * kr)
 def hal_reset_odometer():
     global hal__odo_zero
     hal__odo_zero = hal__encoder_deg()
 def hal_odo_abs():
-    """Avance absoluto (cm desde el arranque, con signo); no se reinicia."""
     return hal__encoder_deg() * geometry_cm_per_deg()
 def hal_odometer_cm():
-    """Avance (cm, con signo) desde el último reset_odometer()."""
     return (hal__encoder_deg() - hal__odo_zero) * geometry_cm_per_deg()
 def hal_servo(port, angle):
     mbot2.servo_set(hal_clamp(angle, 0, 180), port)
@@ -289,7 +312,6 @@ def hal_pitch():
 def hal_probe_light(probe):
     return mbuild.quad_rgb_sensor.get_light(probe)
 def hal_darkness():
-    """Dict sonda -> 0..1 (0 = blanco, 1 = negro) según la calibración LINE_CAL."""
     out = {}
     for pr in hal_PROBES:
         (white, black) = config_LINE_CAL[pr]
@@ -299,11 +321,6 @@ def hal_darkness():
         out[pr] = hal_clamp((white - hal_probe_light(pr)) / span, 0, 1)
     return out
 def hal_offset_from(dk):
-    """Centro ponderado de la oscuridad -> -100..100 (función pura, probada en PC).
-
-    Se resta el fondo (la sonda más clara): sobre una zona oscura (azul, verde) todas las sondas
-    suben igual y la línea se perdía en el promedio (la curva del nivel 3 empieza dentro de la
-    zona azul; lo mostró el simulador)."""
     base = 1.0
     for i in range(4):
         if dk[hal_PROBES[i]] < base:
@@ -325,7 +342,6 @@ def hal_line_offset():
         return hal_offset_from(hal_darkness())
     return config_LINE_SIGN * mbuild.quad_rgb_sensor.get_offset_track(config_LINE_SENSOR)
 def hal_line_read():
-    """(offset, bits) con UNA sola lectura de las sondas (para el lazo de control)."""
     if config_P['line_mode'] == 1:
         dk = hal_darkness()
         th = config_P['dark_th']
@@ -337,7 +353,6 @@ def hal_line_read():
         return (hal_offset_from(dk), bits)
     return (hal_line_offset(), hal_line_bits())
 def hal_line_bits():
-    """Dict sonda -> True si ve línea negra."""
     out = {}
     if config_P['line_mode'] == 1:
         dk = hal_darkness()
@@ -355,14 +370,12 @@ def hal_probe_rgb(probe):
 def hal_probe_color_builtin(probe):
     return mbuild.quad_rgb_sensor.get_color_sta(probe)
 def hal_distance_cm():
-    """Distancia del Ultrasónico 2, o -1 si el robot no lo lleva (HAS_US = False)."""
     if not config_HAS_US:
         return -1
     return mbuild.ultrasonic2.get(index=config_US_SENSOR)
 def hal_button(name):
     return cyberpi.controller.is_press(name)
 def hal_abort_requested():
-    """Botón de abortar (cfg.ABORT_BUTTON) = detener el autónomo (para pedir reinicio)."""
     global hal__abort
     if not hal__abort and cyberpi.controller.is_press(config_ABORT_BUTTON):
         hal__abort = True
@@ -387,10 +400,6 @@ def hal_pad_axis(name):
 # ---- software/core/colors.py ----
 colors_LED_RGB = {'black': (0, 0, 0), 'white': (255, 255, 255), 'red': (255, 0, 0), 'yellow': (255, 200, 0), 'green': (0, 255, 0), 'blue': (0, 0, 255), 'cyan': (0, 255, 255), 'purple': (180, 0, 255)}
 def colors_nearest(rgb, refs):
-    """Nombre del color de referencia más cercano (distancia sobre cromaticidad + brillo).
-
-    Normalizar por el brillo hace la clasificación menos sensible a cambios de luz
-    (reglamento: el robot debe adaptarse a la iluminación)."""
     (r, g, b) = rgb
     total = r + g + b + 1
     best = None
@@ -406,7 +415,6 @@ def colors_nearest(rgb, refs):
             best_d = d
     return best
 def colors_normalize(name):
-    """Nombres del sensor -> nombres del programa (el sensor puede devolver mayúsculas)."""
     if name is None:
         return 'unknown'
     return str(name).strip().lower()
@@ -415,7 +423,6 @@ def colors_read(probe):
         return colors_nearest(hal_probe_rgb(probe), config_COLOR_REF)
     return colors_normalize(hal_probe_color_builtin(probe))
 def colors_read_stable(probe, n=None):
-    """Lee hasta tener n lecturas iguales seguidas (máx. 4n intentos)."""
     if n is None:
         n = config_COLOR_CONFIRM
     last = None
@@ -436,10 +443,8 @@ def colors_show(name):
     hal_leds(rgb[0], rgb[1], rgb[2])
     hal_show(name, line=3, size=24)
 def colors_zone_level(color):
-    """Nivel de inicio según el color de la zona en la que está el robot (0 = no se sabe)."""
     return config_ZONE_LEVEL.get(color, 0)
 def colors_is_card_color(name):
-    """Una tarjeta es cualquier color que no sea el piso blanco ni la línea negra."""
     return name not in ('white', 'black', 'unknown', '')
 # ---- software/controls/motion.py ----
 def motion_sign(v):
@@ -447,7 +452,6 @@ def motion_sign(v):
         return -1
     return 1
 def motion_turn(deg, timeout=None):
-    """Giro relativo en el lugar; positivo = derecha."""
     if timeout is None:
         timeout = config_TURN_TIMEOUT_S
     target = hal_heading() + deg
@@ -472,11 +476,6 @@ def motion_turn(deg, timeout=None):
     hal_stop()
     return False
 def motion_pivot(deg, speed=None, timeout=None):
-    """Giro relativo sobre UNA oruga (la otra detenida); positivo = derecha. Avanza la oruga de
-    afuera: la de la derecha queda quieta al girar a la derecha. Si la oruga que se mueve patina
-    (recortes del pasillo) el robot solo gira más lento: el centro del giro es la oruga quieta y
-    la posición final depende solo del ángulo (en un giro en el lugar una oruga que patina corre
-    el robot hasta 6 cm sin que la odometría lo vea). speed < 0 = pivote hacia atrás."""
     if timeout is None:
         timeout = config_TURN_TIMEOUT_S * 2
     if speed is None:
@@ -512,13 +511,11 @@ def motion_wrap180(deg):
         deg += 360
     return deg
 def motion_turn_to(heading, timeout=None):
-    """Gira hasta un rumbo absoluto por el camino más corto (antes podía dar la vuelta larga)."""
     return motion_turn(motion_wrap180(heading - hal_heading()), timeout)
 def motion__hold(speed, target):
     corr = config_P['head_kp'] * (target - hal_heading())
     hal_drive(speed + corr, speed - corr)
 def motion_straight_until(cond, speed=None, timeout=5.0, target=None):
-    """Avanza recto (manteniendo el rumbo) hasta que cond() sea verdadero."""
     if speed is None:
         speed = config_P['v_straight']
     if target is None:
@@ -535,11 +532,6 @@ def motion_straight_until(cond, speed=None, timeout=5.0, target=None):
     hal_stop()
     return False
 def motion_straight(cm, speed=None, timeout=None, target=None):
-    """Avanza (cm > 0) o retrocede (cm < 0) una distancia medida con encoders.
-
-    target: rumbo (hal.heading) que se sostiene con el giroscopio. Sin target se sostiene el
-    rumbo con el que empezó; con target, el error del giro anterior y los golpes del piso se
-    corrigen durante el avance."""
     if speed is None:
         speed = config_P['v_straight']
     speed = abs(speed) * motion_sign(cm)
@@ -549,8 +541,6 @@ def motion_straight(cm, speed=None, timeout=None, target=None):
     goal = abs(cm)
     return motion_straight_until(lambda : abs(hal_odometer_cm()) >= goal, speed, timeout, target)
 def motion_climb(speed=None, timeout=None, extra_cm=None):
-    """Sube una rampa o escalera: espera a inclinarse, luego a quedar plano, y avanza
-    extra_cm para quedar completamente dentro del nivel."""
     if speed is None:
         speed = config_P['v_ramp']
     if timeout is None:
@@ -584,16 +574,11 @@ def motion_climb(speed=None, timeout=None, extra_cm=None):
 def motion_stairs(extra_cm=None):
     return motion_climb(config_P['v_stairs'], config_STAIRS_TIMEOUT_S, extra_cm)
 def motion_sees_color(name):
-    """Alguna de las cuatro sondas ve ese color. La línea pasa por encima de las zonas, así que
-    las centrales leen negro; las exteriores van a los lados (lo mostró el simulador)."""
     for pr in config_PROBES:
         if colors_read(pr) == name:
             return True
     return False
 def motion_climb_crest(after_cm, speed=None, timeout=None, target=None, color=None, arm_h=None):
-    """Sube hasta pasar la cima (el pitch ya subió y empieza a bajar: el frente está arriba) y
-    avanza after_cm medidos con encoder. Sirve cuando arriba no hay espacio para esperar a quedar
-    plano (nivel 4: la torre está a ~20 cm de la escalera; lo mostró el simulador)."""
     if speed is None:
         speed = config_P['v_stairs']
     if timeout is None:
@@ -621,11 +606,6 @@ def motion_climb_crest(after_cm, speed=None, timeout=None, target=None, color=No
     hal_stop()
     return False
 def motion_spin_to_line(direction=1, timeout=3.0, leave=True):
-    """Gira en el lugar (1 = derecha, -1 = izquierda) hasta que las sondas centrales vean línea.
-
-    leave=True: si ya está sobre una línea, primero sale de ella (para buscar OTRA línea).
-    leave=False: si ya ve la línea, termina (después de un giro en un cruce las sondas, que van
-    cerca del centro de giro, ya quedan sobre la línea nueva)."""
     t0 = hal_now()
     while leave and hal_now() - t0 < timeout * 0.3:
         b = hal_line_bits()
@@ -648,7 +628,6 @@ def motion_on_line():
     b = hal_line_bits()
     return b['L1'] or b['R1']
 def motion_seek_line(speed=None, max_cm=60, target=None):
-    """Avanza recto (con giroscopio) hasta que las sondas centrales vean una línea."""
     if speed is None:
         speed = config_P['v_slow']
     hal_reset_odometer()
@@ -663,8 +642,6 @@ def motion_seek_line(speed=None, max_cm=60, target=None):
     motion_straight_until(cond, speed, t, target)
     return found[0]
 def motion_drive_to_edge(color, speed=None, max_cm=30, target=None):
-    """Avanza recto (IMU) hasta SALIR de una zona de color: referencia fija para empezar una
-    maniobra sin importar dónde quedó o se colocó el robot dentro de la zona."""
     if speed is None:
         speed = config_P['v_slow']
     hal_reset_odometer()
@@ -684,9 +661,6 @@ def motion_drive_to_edge(color, speed=None, max_cm=30, target=None):
     motion_straight_until(cond, speed, 1.0 + max_cm / 6.0, target)
     return state['ok']
 def motion_drive_to_cross(speed=None, max_cm=15, target=None):
-    """Avanza recto (IMU) hasta que las DOS sondas exteriores ven negro fuerte: una línea que
-    cruza el camino. No es seguir la línea: solo sirve de referencia para corregir la distancia.
-    Las marcas verdes y el tope no cuentan (cross_th). Devuelve True si encontró el cruce."""
     if speed is None:
         speed = config_P['v_slow']
     hal_reset_odometer()
@@ -706,8 +680,6 @@ def motion_drive_to_cross(speed=None, max_cm=15, target=None):
     motion_straight_until(cond, speed, 1.0 + max_cm / 6.0, target)
     return st['found']
 def motion_detour(side=None):
-    """Rodea un obstáculo fijo (torre, misión 10) y vuelve a buscar la línea.
-    side: -1 = por la izquierda, 1 = por la derecha. Distancias desde geometry.py."""
     if side is None:
         side = -1
     start = hal_heading()
@@ -749,7 +721,6 @@ def linefollow_reset_junctions():
     linefollow__clear_since = None
     linefollow__armed = True
 def linefollow_correction(err, last_err, integral):
-    """Corrección PID (función pura para poder probarla en PC)."""
     return config_P['kp'] * err + config_P['ki'] * integral + config_P['kd'] * (err - last_err)
 def linefollow_drive_with(err, speed):
     global linefollow__last_err, linefollow__integral
@@ -761,14 +732,12 @@ def linefollow_drive_with(err, speed):
     linefollow__last_err = err
     hal_drive(speed + c, speed - c)
 def linefollow_step(speed):
-    """Un ciclo de control. Devuelve los bits leídos."""
     (err, bits) = hal_line_read()
     linefollow_drive_with(err, speed)
     return bits
 def linefollow_sees_line(bits):
     return bits['L2'] or bits['L1'] or bits['R1'] or bits['R2']
 def linefollow_track_junction(bits, odo):
-    """Actualiza el rastreador con una lectura. Devuelve "X", "L", "R" al cerrar un cruce, o None."""
     global linefollow__win_start, linefollow__seen_l, linefollow__seen_r, linefollow__clear_since, linefollow__armed, linefollow_last_junction
     left = bits.get('L2x', bits['L2'])
     right = bits.get('R2x', bits['R2'])
@@ -809,7 +778,6 @@ def linefollow__check_green():
     elif right:
         linefollow__pending_turn = 1
 def linefollow_turn_at_junction(deg):
-    """Avanza hasta que el CENTRO DE GIRO quede sobre el último cruce, gira y se alinea."""
     done = 0
     if linefollow_last_junction is not None:
         done = hal_odo_abs() - linefollow_last_junction[1]
@@ -825,10 +793,6 @@ def linefollow_turn_at_junction(deg):
     linefollow__after_turn = True
     return ok
 def linefollow_follow_until(cond, speed=None, timeout=10.0, green=False):
-    """Sigue la línea hasta que cond(bits, junction) sea verdadero.
-
-    junction es "X"/"L"/"R" en el ciclo en que se cierra un cruce, si no None.
-    Si la línea se pierde más de P["lost_s"] segundos, devuelve False."""
     global linefollow__pending_turn, linefollow__after_turn, linefollow__armed
     if speed is None:
         speed = config_P['v_line']
@@ -865,7 +829,6 @@ def linefollow_follow_until(cond, speed=None, timeout=10.0, green=False):
     hal_stop()
     return False
 def linefollow_at_junction(count=1, kind='any'):
-    """Cuenta cruces; kind = "any", "X", "L" o "R" ("L" también cuenta las "X")."""
     state = {'n': 0}
 
     def cond(bits, j):
@@ -882,9 +845,6 @@ def linefollow_at_color(name, probes=('L1', 'R1')):
         return False
     return cond
 def linefollow_color_then_cm(name, cm, probes=None):
-    """Verdadero `cm` después de que alguna sonda vio ese color. Sirve para terminar arriba de una
-    rampa SIN detenerse sobre la pendiente (parado ahí, el robot se resbalaba hacia atrás al
-    arrancar; lo mostró el simulador con una rampa de 40°)."""
     if probes is None:
         probes = config_PROBES
     state = {'from': None}
@@ -905,9 +865,6 @@ def linefollow_after_cm(cm):
         return hal_odo_abs() - start >= cm
     return cond
 def linefollow_leave_color(name, probes=None):
-    """Verdadero cuando las sondas, después de haber visto la zona de ese color, la dejan de ver
-    (3 lecturas seguidas).
-    Guarda la odometría en last_edge: es la referencia para medir desde el borde de la zona."""
     if probes is None:
         probes = config_PROBES
     state = {'n': 0, 'seen': False}
@@ -929,15 +886,12 @@ def linefollow_leave_color(name, probes=None):
         return False
     return cond
 def linefollow_obstacle_within(cm):
-    """Solo con ultrasónico (HAS_US = True)."""
 
     def cond(bits, j):
         d = hal_distance_cm()
         return 0 < d <= cm
     return cond
 def linefollow_line_end(cm=2.0):
-    """Verdadero cuando ninguna sonda ve línea durante `cm` de avance (en una curva cerrada la
-    línea se pierde un instante y no es el final; lo mostró el simulador)."""
     state = {'since': None}
 
     def cond(bits, j):
@@ -963,15 +917,11 @@ def gripper_claw(angle):
 def gripper_open_claw():
     gripper_claw(config_P['claw_open'])
 def gripper_arm_to(h):
-    """Garra a la altura h (cm sobre el piso)."""
     gripper__move(config_SERVO_ARM, geometry_arm_servo(h))
 def gripper_home():
-    """Posición de viaje: brazo a 90° (garra sobre la nariz, lo más compacto para colocar el
-    robot en las zonas de inicio, que son más chicas que él), garra abierta."""
     gripper_arm_to(config_P['h_top'])
     gripper_open_claw()
 def gripper_hold(seconds=None):
-    """Mantiene el objeto quieto el tiempo que pide el reglamento (>= 5 s)."""
     if seconds is None:
         seconds = config_HOLD_VALID_S
     hal_stop()
@@ -983,70 +933,20 @@ def gripper_hold(seconds=None):
         hal_wait(0.1)
     return True
 # ---- software/autonomous/missions.py ----
-missions_L1_SOUTH_CM = 33.8
-missions_L1_EAST_CM = 59.0
-missions_L1_CROSS_SLACK = 6.0
-missions_L1_NORTH_CM = 18.4
-missions_L1_TO_RAMP_CM = 18.7
-missions_L1_START = (12.6, 12.9)
-missions_L1_TURN_X = 15.4
-missions_L1_CROSS_CY = 43.2
-missions_L1_TURN_BACK_CM = 1.5
-missions_L1_CUBE_Y = 47.4
-missions_L1_PIVOT_BACK_CM = 11.0
 missions_L1_PIVOT_D = 11.9
-missions_L1_BACK_CM = 4.5
-missions_L2_TO_PED_CM = 8.8
-missions_L2_T_BACK_CM = 3.0
-missions_L2_BACK_CM = 6.0
-missions_T2_PLACED = (131.9, 30.4)
-missions_T2_FROM_M4 = (133.9, 26.8)
-missions_CORRIDOR_TURN = (134.2, 43.5)
-missions_CORRIDOR_ENTRY_Y = 45.0
-missions_CORRIDOR_DIAG_HEAD = -26.0
-missions_CORRIDOR_DIAG_PT = (212.7, 16.0)
-missions_CORRIDOR_DIAG_START_X = 150.5
-missions_CORRIDOR_DIAG_MAX_CM = 110.0
-missions_CORRIDOR_DIAG_V = 14
-missions_CORRIDOR_DIAG_KP = 2.5
-missions_CORRIDOR_DIAG_DET = (208.96, 17.82)
-missions_CORRIDOR_EXIT_Y = 15.9
-missions_CORRIDOR_DIAG_X = 218.6
-missions_CORRIDOR_TURN_X = 223.0
-missions_RAMP2_X = 228.15
-missions_RAMP2_LINE_X = 228.6
-missions_RAMP2_BACK_CM = 8.0
-missions_CORRIDOR_RAMP_CM = 5.5
-missions_CORRIDOR_TURN_HEAD = 60
-missions_CORRIDOR = [('goto', missions_CORRIDOR_TURN[0], missions_CORRIDOR_TURN[1]), ('head', 0), ('track', 0, 'y', missions_CORRIDOR_ENTRY_Y, missions_CORRIDOR_DIAG_START_X - missions_CORRIDOR_TURN[0]), ('pivot', missions_CORRIDOR_DIAG_HEAD), ('diag', missions_CORRIDOR_DIAG_PT[0], missions_CORRIDOR_DIAG_PT[1], missions_CORRIDOR_DIAG_HEAD, missions_CORRIDOR_DIAG_MAX_CM, missions_CORRIDOR_DIAG_DET[0], missions_CORRIDOR_DIAG_DET[1], missions_CORRIDOR_DIAG_V, missions_CORRIDOR_DIAG_KP), ('pivot', 0), ('track_line', 0, 'y', missions_CORRIDOR_EXIT_Y, 60), ('fix', 'x', missions_CORRIDOR_DIAG_X), ('track', 0, 'y', missions_CORRIDOR_EXIT_Y, missions_CORRIDOR_TURN_X - missions_CORRIDOR_DIAG_X), ('head', missions_CORRIDOR_TURN_HEAD), ('drive', missions_CORRIDOR_TURN_HEAD, missions_CORRIDOR_RAMP_CM, 'v_slow'), ('head', 90), ('fix_line', 'x', missions_RAMP2_LINE_X, 1), ('straight', -missions_RAMP2_BACK_CM, 'v_slow')]
-missions_L3_IN_CM = 19.2
-missions_L3_PRISM_SOUTH = 3.6
-missions_L3_PRISM_BACK = 4.0
-missions_L3_PRISM_GRAB = 6.5
-missions_L3_PRISM_HEAD = 107
-missions_L3_PRISM_CARRY = 22.0
-missions_L3_PRISM_LEAVE = 8.0
-missions_L3_EDGE = (228.8, 70.8)
-missions_L3_STAIRS_POINT = (166.1, 96.4)
-missions_PRISM_MANEUVER = [('edge', 'blue', 'v_slow', 30, 90), ('pose', missions_L3_EDGE[0], missions_L3_EDGE[1], 90), ('drive', 90, missions_L3_PRISM_SOUTH), ('arm', 'h_top'), ('head', 180), ('straight', -missions_L3_PRISM_BACK, 'v_slow'), ('claw', 'claw_open'), ('arm', 'h_prism'), ('drive', 180, missions_L3_PRISM_GRAB), ('head', missions_L3_PRISM_HEAD), ('drive', missions_L3_PRISM_HEAD, missions_L3_PRISM_CARRY), ('arm', 'h_carry'), ('straight', -missions_L3_PRISM_LEAVE, 'v_slow')]
-missions_STAIRS_BACK_CM = 5.0
-missions_TO_STAIRS = [('head', -90), ('straight', -missions_STAIRS_BACK_CM, 'v_slow'), ('cross', 'v_slow', 15, -90), ('center',), ('head', 180), ('line_ref', 180, ('pitch',), 'v_slow', 10)]
-missions_L3_RETRY_TO_STAIRS = [('ref', 90), ('edge', 'blue', 'v_slow', 30, 90), ('pose', missions_L3_EDGE[0], missions_L3_EDGE[1], 90), ('goto', missions_L3_STAIRS_POINT[0], missions_L3_STAIRS_POINT[1])]
-missions_BALL_HEAD = 113
-missions_LINE_HEAD_AT_MARK2 = -152
-missions_BALL_STEPS = [('line', ('color', 'red'), 'v_slow', 20), ('center',), ('head', missions_BALL_HEAD), ('arm', 'h_pedestal'), ('claw', 'claw_open'), ('approach_obj', 'h_pedestal', 'ball_ped_dist'), ('claw', 'claw_ball'), ('arm', 'h_carry'), ('retreat',), ('hold',), ('head', missions_LINE_HEAD_AT_MARK2)]
-missions_STAIRS_TOP_CM = 8.0
-missions_TOWER_WEST_CM = 37.0
-missions_CARDS_BACK_CM = 7.0
-missions_TOWER_DETOUR = [('drive', 110, 20), ('drive', 180, missions_TOWER_WEST_CM), ('seek', 'v_slow', 25, -90), ('center',), ('head', 180)]
+missions_CORRIDOR = [('goto', pista_nivel_2_giro_al_pasillo_x, pista_nivel_2_giro_al_pasillo_y), ('head', 0), ('track', 0, 'y', pista_nivel_2_abertura_izquierda_y, pista_nivel_2_diagonal_inicio_x - pista_nivel_2_giro_al_pasillo_x), ('pivot', pista_nivel_2_diagonal_rumbo), ('diag', pista_nivel_2_diagonal_punto_x, pista_nivel_2_diagonal_punto_y, pista_nivel_2_diagonal_rumbo, pista_nivel_2_diagonal_max_cm, pista_nivel_2_diagonal_deteccion_x, pista_nivel_2_diagonal_deteccion_y, pista_nivel_2_diagonal_vel, pista_nivel_2_diagonal_kp), ('pivot', 0), ('track_line', 0, 'y', pista_nivel_2_abertura_derecha_y, 60), ('fix', 'x', pista_nivel_2_x_al_ver_diagonal), ('track', 0, 'y', pista_nivel_2_abertura_derecha_y, pista_nivel_2_x_giro_salida - pista_nivel_2_x_al_ver_diagonal), ('head', pista_nivel_2_rumbo_hacia_rampa), ('drive', pista_nivel_2_rumbo_hacia_rampa, pista_nivel_2_avance_hacia_rampa_cm, 'v_slow'), ('head', 90), ('fix_line', 'x', pista_nivel_2_rampa_linea_x, 1), ('straight', -pista_nivel_2_rampa_retroceso_cm, 'v_slow')]
+missions_PRISM_MANEUVER = [('edge', 'blue', 'v_slow', 30, 90), ('pose', pista_nivel_3_orilla_zona_azul_x, pista_nivel_3_orilla_zona_azul_y, 90), ('drive', 90, pista_nivel_3_orilla_a_prisma_cm), ('arm', 'h_top'), ('head', 180), ('straight', -pista_nivel_3_retroceso_antes_de_bajar_garra_cm, 'v_slow'), ('claw', 'claw_open'), ('arm', 'h_prism'), ('drive', 180, pista_nivel_3_avance_para_tomar_prisma_cm), ('head', pista_nivel_3_rumbo_a_zona_punteada), ('drive', pista_nivel_3_rumbo_a_zona_punteada, pista_nivel_3_prisma_a_zona_punteada_cm), ('arm', 'h_carry'), ('straight', -pista_nivel_3_retroceso_tras_soltar_cm, 'v_slow')]
+missions_TO_STAIRS = [('head', -90), ('straight', -pista_nivel_3_retroceso_antes_de_escalera_cm, 'v_slow'), ('cross', 'v_slow', 15, -90), ('center',), ('head', 180), ('line_ref', 180, ('pitch',), 'v_slow', 10)]
+missions_L3_RETRY_TO_STAIRS = [('ref', 90), ('edge', 'blue', 'v_slow', 30, 90), ('pose', pista_nivel_3_orilla_zona_azul_x, pista_nivel_3_orilla_zona_azul_y, 90), ('goto', pista_nivel_3_frente_escalera_x, pista_nivel_3_frente_escalera_y)]
+missions_BALL_STEPS = [('line', ('color', 'red'), 'v_slow', 20), ('center',), ('head', pista_nivel_3_pelota_rumbo), ('arm', 'h_pedestal'), ('claw', 'claw_open'), ('approach_obj', 'h_pedestal', 'ball_ped_dist'), ('claw', 'claw_ball'), ('arm', 'h_carry'), ('retreat',), ('hold',), ('head', pista_nivel_3_pelota_rumbo_de_regreso)]
+missions_TOWER_DETOUR = [('drive', pista_nivel_4_rodeo_rumbo, pista_nivel_4_rodeo_cm), ('drive', 180, pista_nivel_4_pasar_torre_al_oeste_cm), ('seek', 'v_slow', 25, -90), ('center',), ('head', 180)]
 def missions_junctions(route):
-    """Tabla (cruces, tipo, giro) -> pasos. Ya no la usa el nivel 1; queda para rutas por línea."""
     steps = []
     for (n, kind, deg) in route:
         steps.append(('line', ('junction', n, kind), 'v_line', 10))
         steps.append(('jturn', deg))
     return steps
-missions_MISSIONS = [{'id': 1, 'level': 1, 'pts': 50, 'name': 'Seguir linea', 'critical': True, 'steps': [('arm', 'h_top'), ('claw', 'claw_open'), ('ref', 90), ('pose', missions_L1_START[0], missions_L1_START[1], 90), ('track', 90, 'x', missions_L1_TURN_X, missions_L1_SOUTH_CM - missions_L1_CROSS_SLACK, 'v_line'), ('cross', 'v_slow', 2 * missions_L1_CROSS_SLACK, 90), ('fix', 'y', missions_L1_CROSS_CY), ('straight', -missions_L1_TURN_BACK_CM, 'v_slow'), ('head', 0), ('track', 0, 'y', missions_L1_CUBE_Y, missions_L1_EAST_CM - missions_L1_CROSS_SLACK - (missions_L1_TURN_X - missions_L1_START[0]), 'v_line'), ('cross', 'v_slow', 2 * missions_L1_CROSS_SLACK, 0)]}, {'id': 2, 'level': 1, 'pts': 50, 'name': 'Tomar cubo', 'critical': False, 'steps': [('approach_ped', 'h_pedestal', 'ped1_from_cross'), ('arm', 'h_pedestal'), ('claw', 'claw_cube'), ('arm', 'h_carry'), ('retreat',), ('hold',)]}, {'id': 3, 'level': 1, 'pts': 50, 'name': 'Subir nivel 2', 'critical': True, 'steps': [('straight', -missions_L1_PIVOT_BACK_CM, 'v_slow'), ('pivot', -90), ('drive', -90, missions_L1_NORTH_CM - missions_L1_PIVOT_D - (49.0 - missions_L1_CUBE_Y)), ('drive', 0, missions_L1_TO_RAMP_CM - missions_L1_PIVOT_D + (missions_L1_PIVOT_BACK_CM - missions_L1_BACK_CM)), ('line', ('pitch',), 'v_slow', 6), ('arm', 'h_climb'), ('line', ('junction', 1, 'any'), 'v_ramp', 8), ('center',), ('arm', 'h_carry')]}, {'id': 4, 'level': 1, 'pts': 100, 'name': 'Dejar cubo', 'critical': False, 'end_level': True, 'steps': [('ref', 0), ('jturn', -90), ('line', ('cm', missions_L2_TO_PED_CM), 'v_slow', 8), ('arm', 'h_pedestal'), ('claw', 'claw_open'), ('arm', 'h_carry'), ('straight', -missions_L2_BACK_CM, 'v_slow'), ('head', 90), ('pose', missions_T2_FROM_M4[0], missions_T2_FROM_M4[1], None)]}, {'id': 5, 'level': 2, 'pts': 100, 'name': 'Zona obstaculos', 'critical': True, 'steps': [('if_placed', [('ref', 0), ('straight', -missions_L2_T_BACK_CM, 'v_slow'), ('jturn', 90), ('pose', missions_T2_PLACED[0], missions_T2_PLACED[1], None)])] + missions_CORRIDOR}, {'id': 6, 'level': 2, 'pts': 100, 'name': 'Subir nivel 3', 'critical': True, 'end_level': True, 'steps': [('arm', 'h_climb'), ('ramp_up', 90, missions_RAMP2_X, 'blue', missions_L3_IN_CM, 'v_ramp', 60)]}, {'id': 7, 'level': 3, 'pts': 100, 'name': 'Mover prisma', 'critical': False, 'steps': [('ref', 90, 3)] + missions_PRISM_MANEUVER}, {'id': 9, 'level': 3, 'pts': 150, 'name': 'Escalera nivel 4', 'critical': True, 'steps': [('if_skipped', 7, missions_L3_RETRY_TO_STAIRS), ('if_ran', 7, [('goto', missions_L3_STAIRS_POINT[0], missions_L3_STAIRS_POINT[1])])] + missions_TO_STAIRS + [('arm', 'h_climb'), ('crest', missions_STAIRS_TOP_CM, 180, 'green', 'h_top')]}, {'id': 10, 'level': 4, 'pts': 100, 'name': 'Evitar torre', 'critical': True, 'steps': [('ref', 180, 4), ('arm', 'h_top')] + missions_TOWER_DETOUR}, {'id': 11, 'level': 4, 'pts': 120, 'name': 'Colores', 'critical': False, 'steps': [('cards', missions_CARDS_BACK_CM)]}, {'id': 13, 'level': 4, 'pts': 100, 'name': 'Meta azul', 'critical': False, 'steps': [('stop_in', 'blue')]}]
+missions_MISSIONS = [{'id': 1, 'level': 1, 'pts': 50, 'name': 'Seguir linea', 'critical': True, 'steps': [('arm', 'h_top'), ('claw', 'claw_open'), ('ref', 90), ('pose', pista_nivel_1_inicio_x, pista_nivel_1_inicio_y, 90), ('track', 90, 'x', pista_nivel_1_x_de_bajada, pista_nivel_1_inicio_a_linea_inferior_cm - pista_nivel_1_holgura_cruce_cm, 'v_line'), ('cross', 'v_slow', 2 * pista_nivel_1_holgura_cruce_cm, 90), ('fix', 'y', pista_nivel_1_linea_inferior_y), ('straight', -pista_nivel_1_retroceso_antes_de_girar_cm, 'v_slow'), ('head', 0), ('track', 0, 'y', pista_nivel_1_y_hacia_cubo, pista_nivel_1_cruce_a_cruce_del_cubo_cm - pista_nivel_1_holgura_cruce_cm - (pista_nivel_1_x_de_bajada - pista_nivel_1_inicio_x), 'v_line'), ('cross', 'v_slow', 2 * pista_nivel_1_holgura_cruce_cm, 0)]}, {'id': 2, 'level': 1, 'pts': 50, 'name': 'Tomar cubo', 'critical': False, 'steps': [('approach_ped', 'h_pedestal', 'ped1_from_cross'), ('arm', 'h_pedestal'), ('claw', 'claw_cube'), ('arm', 'h_carry'), ('retreat',), ('hold',)]}, {'id': 3, 'level': 1, 'pts': 50, 'name': 'Subir nivel 2', 'critical': True, 'steps': [('straight', -pista_nivel_1_retroceso_para_pivotear_cm, 'v_slow'), ('pivot', -90), ('drive', -90, pista_nivel_1_cubo_a_linea_de_rampa_cm - missions_L1_PIVOT_D - (pista_nivel_1_linea_del_cubo_y - pista_nivel_1_y_hacia_cubo)), ('drive', 0, pista_nivel_1_linea_a_pie_de_rampa_cm - missions_L1_PIVOT_D + (pista_nivel_1_retroceso_para_pivotear_cm - pista_nivel_1_retroceso_tras_cubo_cm)), ('line', ('pitch',), 'v_slow', 6), ('arm', 'h_climb'), ('line', ('junction', 1, 'any'), 'v_ramp', 8), ('center',), ('arm', 'h_carry')]}, {'id': 4, 'level': 1, 'pts': 100, 'name': 'Dejar cubo', 'critical': False, 'end_level': True, 'steps': [('ref', 0), ('jturn', -90), ('line', ('cm', pista_nivel_2_t_a_pedestal_cm), 'v_slow', 8), ('arm', 'h_pedestal'), ('claw', 'claw_open'), ('arm', 'h_carry'), ('straight', -pista_nivel_2_retroceso_tras_dejar_cubo_cm, 'v_slow'), ('head', 90), ('pose', pista_nivel_2_tras_dejar_cubo_x, pista_nivel_2_tras_dejar_cubo_y, None)]}, {'id': 5, 'level': 2, 'pts': 100, 'name': 'Zona obstaculos', 'critical': True, 'steps': [('if_placed', [('ref', 0), ('straight', -pista_nivel_2_retroceso_en_t_cm, 'v_slow'), ('jturn', 90), ('pose', pista_nivel_2_colocado_x, pista_nivel_2_colocado_y, None)])] + missions_CORRIDOR}, {'id': 6, 'level': 2, 'pts': 100, 'name': 'Subir nivel 3', 'critical': True, 'end_level': True, 'steps': [('arm', 'h_climb'), ('ramp_up', 90, pista_nivel_2_rampa_centro_x, 'blue', pista_nivel_3_zona_azul_a_dentro_cm, 'v_ramp', 60)]}, {'id': 7, 'level': 3, 'pts': 100, 'name': 'Mover prisma', 'critical': False, 'steps': [('ref', 90, 3)] + missions_PRISM_MANEUVER}, {'id': 9, 'level': 3, 'pts': 150, 'name': 'Escalera nivel 4', 'critical': True, 'steps': [('if_skipped', 7, missions_L3_RETRY_TO_STAIRS), ('if_ran', 7, [('goto', pista_nivel_3_frente_escalera_x, pista_nivel_3_frente_escalera_y)])] + missions_TO_STAIRS + [('arm', 'h_climb'), ('crest', pista_nivel_4_escalera_a_dentro_cm, 180, 'green', 'h_top')]}, {'id': 10, 'level': 4, 'pts': 100, 'name': 'Evitar torre', 'critical': True, 'steps': [('ref', 180, 4), ('arm', 'h_top')] + missions_TOWER_DETOUR}, {'id': 11, 'level': 4, 'pts': 120, 'name': 'Colores', 'critical': False, 'steps': [('cards', pista_nivel_4_retroceso_para_tarjetas_cm)]}, {'id': 13, 'level': 4, 'pts': 100, 'name': 'Meta azul', 'critical': False, 'steps': [('stop_in', 'blue')]}]
 def missions_total_points():
     t = 0
     for m in missions_MISSIONS:
@@ -1059,7 +959,6 @@ odometry__off = 0.0
 odometry__last = None
 odometry_slip_cm = 0.0
 def odometry_set_pose(x, y, heading):
-    """El robot está en (x, y) cm mirando a `heading` grados de mapa."""
     global odometry__x, odometry__y, odometry__off, odometry__last, odometry_slip_cm
     odometry__x = x
     odometry__y = y
@@ -1072,7 +971,6 @@ def odometry_heading():
 def odometry_pose():
     return (odometry__x, odometry__y, odometry_heading())
 def odometry_update():
-    """Integra el movimiento desde la última llamada (llamarla en cada ciclo de control)."""
     global odometry__x, odometry__y, odometry__last, odometry_slip_cm
     (l, r) = hal_tracks_cm()
     h = hal_heading()
@@ -1108,9 +1006,6 @@ def odometry_wrap(d):
         d += 360
     return d
 def odometry_goto(x, y, speed=None, tol=1.0, timeout=None):
-    """Va al punto (x, y) del mapa: gira hacia él y avanza corrigiendo el rumbo hacia el punto
-    con la posición estimada (si un recorte lo desvía, el controlador lo regresa). Termina al
-    llegar o al rebasarlo. Devuelve True si llegó."""
     if speed is None:
         speed = config_P['v_slow']
     odometry_update()
@@ -1148,12 +1043,6 @@ def odometry_goto(x, y, speed=None, tol=1.0, timeout=None):
     hal_stop()
     return False
 def odometry_track(x0, y0, hdg, speed=None, timeout=5.0, max_cm=None, stop=None, max_deg=None, halt=True):
-    """Sigue la recta del mapa que pasa por (x0, y0) con rumbo `hdg`, corrigiendo el rumbo Y el
-    desvío lateral (si el patinaje lo empuja de lado, regresa a la recta). Termina cuando stop()
-    es verdadero, al recorrer max_cm o al acabarse el tiempo. Devuelve True si fue por stop().
-    max_deg: ángulo máximo contra la recta al corregir el desvío (por omisión track_max).
-    halt=False: al cumplirse stop() no frena (para encadenar otro tramo sin parar en una rampa).
-    speed < 0: hacia atrás por la misma recta (rumbo hdg = hacia donde mira el robot)."""
     if speed is None:
         speed = config_P['v_slow']
     odometry_update()
@@ -1199,8 +1088,6 @@ autonomous_placed = True
 autonomous_next_level = 1
 autonomous_completed = set()
 def autonomous_reset_state():
-    """Todo lo que una corrida anterior pudo dejar (al relanzar el autónomo desde el menú sin
-    apagar el robot, una referencia vieja movía el primer giro; lo mostró el simulador)."""
     global linefollow__after_turn, linefollow_last_edge, linefollow_last_junction
     global autonomous_cards, autonomous_results, autonomous_last_advance, autonomous_heading_ref, autonomous_goal_entry
     autonomous_goal_entry = None
@@ -1213,7 +1100,6 @@ def autonomous_reset_state():
     linefollow_last_edge = None
     linefollow__after_turn = False
 def autonomous_val(x):
-    """Número tal cual, o el valor actual del parámetro cfg.P con ese nombre."""
     if isinstance(x, str):
         return config_P[x]
     return x
@@ -1240,14 +1126,11 @@ def autonomous_make_cond(spec):
         return lambda bits, j: abs(motion_wrap180(target - autonomous_heading_ref - hal_heading())) < tol
     raise ValueError('condicion desconocida: %s' % kind)
 def autonomous_red_index(found):
-    """Posición (0..5) de la tarjeta roja, o -1."""
     for i in range(len(found)):
         if found[i][0] == 'red':
             return i
     return -1
 def autonomous__note_card(c, odo):
-    """Registra la tarjeta si no es una ya vista (mismo color a menos de 6 cm: la tarjeta mide
-    4.7 cm y al retroceder y volver a pasar se lee en sus dos orillas)."""
     for (c0, o0) in autonomous_cards:
         if c0 == c and abs(o0 - odo) < 6:
             return False
@@ -1255,8 +1138,6 @@ def autonomous__note_card(c, odo):
     colors_show(c)
     return True
 def autonomous__scan_back(back_cm):
-    """Retrocede recto (rumbo con el giroscopio) leyendo tarjetas: al volver a la línea
-    después de rodear la torre, la sonda ya pasó la primera tarjeta."""
     start = hal_odo_abs()
     h0 = hal_heading()
     t0 = hal_now()
@@ -1277,8 +1158,6 @@ def autonomous__scan_back(back_cm):
         hal_wait(config_LOOP_DT)
     hal_stop()
 def autonomous_scan_cards(back_cm=0):
-    """Sigue la línea despacio y registra cada tarjeta de color (color + odometría).
-    back_cm: antes, retrocede eso leyendo (tarjetas que quedaron detrás de la sonda)."""
     global autonomous_cards
     autonomous_cards = []
     if back_cm > 0:
@@ -1333,9 +1212,6 @@ def autonomous_drop_red():
     motion_spin_to_line(-side, timeout=1.5)
     return ok
 def autonomous_stop_in(color):
-    """Para completamente dentro de la zona: avanza zone_extra() contado desde que las sondas
-    ENTRARON a la zona (si la lectura de tarjetas ya entró, no se vuelve a contar desde aquí;
-    antes el robot se pasaba y salía por el otro lado: lo mostró el simulador)."""
     global autonomous_goal_entry
     if autonomous_goal_entry is None:
         start = {'odo': None}
@@ -1358,16 +1234,13 @@ def autonomous__advance(cm):
     autonomous_last_advance = cm
     return motion_straight(cm, config_P['v_slow'])
 def autonomous_approach_pedestal(h, from_cross):
-    """Garra sobre el centro de un pedestal que está a from_cross cm del último cruce."""
     traveled = 0
     if linefollow_last_junction is not None:
         traveled = hal_odo_abs() - linefollow_last_junction[1]
     return autonomous__advance(geometry_pedestal_advance(autonomous_val(h), autonomous_val(from_cross), traveled))
 def autonomous_approach_object(h, dist):
-    """Garra sobre un objeto cuyo centro está a dist cm del centro de giro, al frente."""
     return autonomous__advance(geometry_reach_advance(autonomous_val(dist), autonomous_val(h)))
 def autonomous_to_tower():
-    """Sigue la línea hasta quedar a side_margin de la torre (referencia: borde de la zona verde)."""
     traveled = 0
     if linefollow_last_edge is not None:
         traveled = hal_odo_abs() - linefollow_last_edge
@@ -1380,9 +1253,6 @@ def autonomous_to_tower():
 autonomous_RAMP_FLAT_DEG = 6.0
 autonomous_RAMP_MAX_DEG = 1.5
 def autonomous_map_target(deg):
-    """Rumbo de mapa -> valor de hal.heading() al que hay que llegar por el camino corto.
-    hal.heading() acumula vueltas; sin normalizar, una recta podía "sostener" un rumbo a 360°
-    del real y torcerse (lo mostró el simulador)."""
     now = hal_heading()
     return now + motion_wrap180(deg - autonomous_heading_ref - now)
 def autonomous_run_step(step):
@@ -1648,12 +1518,6 @@ def autonomous_run_mission(m):
             return False
     return True
 def autonomous_run(start_level=1, budget_s=None, t_start=None, skip=None):
-    """Corre el TRAMO que empieza en start_level. Devuelve los puntos estimados.
-
-    Con cfg.SEGMENTS el robot se detiene al terminar el tramo (misión con "end_level") o al
-    fallar una misión crítica; next_level queda con el nivel que conviene elegir después.
-    skip: misiones ya logradas en este encendido; solo se saltan las de manipulación (las de
-    navegación, críticas, se repiten porque llevan al robot a donde empieza la siguiente)."""
     global autonomous_run_level, autonomous_placed, autonomous_next_level, autonomous_current_level
     if budget_s is None:
         budget_s = config_AUTO_BUDGET_S
@@ -1705,16 +1569,12 @@ def autonomous_run(start_level=1, budget_s=None, t_start=None, skip=None):
     hal_stop()
     return points
 def autonomous_detect_level():
-    """Lee el color de la zona de inicio bajo el robot (rojo/amarillo/azul/verde)."""
     for probe in ('L1', 'R1'):
         lvl = colors_zone_level(colors_read_stable(probe))
         if lvl:
             return lvl
     return 1
 def autonomous_choose_level(level=None):
-    """Pantalla de inicio del autónomo. Joystick: elige el nivel (cfg.LEVEL_KEYS: arriba 1,
-    abajo 2, izquierda 3, derecha 4). START_BUTTON (B): arrancar el tramo. Centro del joystick:
-    menú de ajustes. Devuelve el nivel, o 0 = ajustes."""
     if level is None:
         level = autonomous_detect_level()
     hal_wait(0.3)
@@ -1747,7 +1607,6 @@ def settings_snapshot():
         params[k] = config_P[k]
     return {'P': params, 'LINE_CAL': cal}
 def settings_apply(data):
-    """Aplica un diccionario guardado; ignora claves desconocidas (versiones viejas)."""
     for k in data.get('P', {}):
         if k in config_P:
             config_P[k] = data['P'][k]
@@ -1773,8 +1632,6 @@ def settings_load():
     except Exception:
         return False
 def settings_cal_from_samples(samples):
-    """samples: dict sonda -> lista de lecturas de luz. Devuelve dict sonda -> [blanco, negro]
-    o None si alguna sonda no vio contraste (no pasó sobre la línea)."""
     out = {}
     for pr in config_PROBES:
         s = samples[pr]
@@ -1785,7 +1642,6 @@ def settings_cal_from_samples(samples):
         out[pr] = [hi, lo]
     return out
 def settings_calibrate_line():
-    """Con el robot centrado sobre la línea: gira ~45° a cada lado leyendo las 4 sondas."""
     hal_show('Calibrando linea...', line=2)
     samples = {}
     for pr in config_PROBES:
@@ -1812,7 +1668,6 @@ def settings_calibrate_line():
     hal_show('Linea OK', line=2)
     return True
 def settings_show_sensors():
-    """Muestra oscuridad por sonda, offset y distancia hasta presionar B."""
     hal_wait(0.3)
     while not hal_button('b'):
         dk = hal_darkness()
@@ -1844,7 +1699,6 @@ def settings_items():
         out.append(('action', a))
     return out
 def settings_bump(spec, direction):
-    """Cambia el parámetro spec = (grupo, clave, paso, min, max) un paso en esa dirección."""
     key = spec[1]
     v = config_P[key] + direction * spec[2]
     v = hal_clamp(v, spec[3], spec[4])
@@ -1855,7 +1709,6 @@ def settings_bump(spec, direction):
     config_P[key] = v
     return v
 def settings_try_param(spec):
-    """Prueba física de un parámetro: el brazo va a la altura, la garra a la apertura."""
     key = spec[1]
     if key.startswith('h_'):
         gripper_arm_to(config_P[key])

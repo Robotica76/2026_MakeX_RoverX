@@ -1,22 +1,22 @@
-# Funciones de movimiento preciso del Rover X (versión mejorada de FuncionesEnPython.mblock).
+## @file funciones_rover.py
+#  @brief Funciones de movimiento preciso del Rover X (versión mejorada de FuncionesEnPython.mblock). Archivo único: se sube directo desde mBlock.
+#  @details Mismo uso que el programa original: se sube desde mBlock (modo "subir", Python) y se prueba con
+#  los botones. Lo que cambia:
+#    - avanzar_cm(): avanza por DISTANCIA (encoders) y no por tiempo, sosteniendo el rumbo con el
+#      giroscopio. Usa las medidas del robot: diámetro efectivo de la oruga 4.18 cm y la oruga
+#      izquierda avanza 2.3 % menos por grado (prueba de 1 m: 63.5 / 65 cm).
+#    - girar(): en vez de parar al 77 % del ángulo ("* 1.3 por error del sensor"), FRENA al
+#      acercarse y termina corrigiendo hasta quedar a menos de 1°. Si el error era la inercia,
+#      esto lo resuelve; si el giroscopio de verdad mide de menos, se corrige con GYRO_SCALE
+#      (ver la prueba "giro a mano" abajo).
+#    - El rumbo no se reinicia en cada giro: los ángulos se suman sin acumular error.
 #
-# Mismo uso que el programa original: se sube desde mBlock (modo "subir", Python) y se prueba con
-# los botones. Lo que cambia:
-#   - avanzar_cm(): avanza por DISTANCIA (encoders) y no por tiempo, sosteniendo el rumbo con el
-#     giroscopio. Usa las medidas del robot: diámetro efectivo de la oruga 4.18 cm y la oruga
-#     izquierda avanza 2.3 % menos por grado (prueba de 1 m: 63.5 / 65 cm).
-#   - girar(): en vez de parar al 77 % del ángulo ("* 1.3 por error del sensor"), FRENA al
-#     acercarse y termina corrigiendo hasta quedar a menos de 1°. Si el error era la inercia,
-#     esto lo resuelve; si el giroscopio de verdad mide de menos, se corrige con GYRO_SCALE
-#     (ver la prueba "giro a mano" abajo).
-#   - El rumbo no se reinicia en cada giro: los ángulos se suman sin acumular error.
-#
-# Botones:
-#   A          secuencia de prueba (la misma del programa original, ahora en cm)
-#   B          detener; con el robot quieto, pone el rumbo en 0 (para la prueba a mano)
-#   joystick   arriba 45° der, abajo 90° izq, izquierda 30° der, derecha 180°, centro 360°
-# En reposo la pantalla muestra el rumbo: GIRAR EL ROBOT A MANO 360° (contra una escuadra o una
-# marca en el piso) y anotar lo que marca -> GYRO_SCALE = 360 / lectura.
+#  Botones:
+#    A          secuencia de prueba (la misma del programa original, ahora en cm)
+#    B          detener; con el robot quieto, pone el rumbo en 0 (para la prueba a mano)
+#    joystick   arriba 45° der, abajo 90° izq, izquierda 30° der, derecha 180°, centro 360°
+#  En reposo la pantalla muestra el rumbo: GIRAR EL ROBOT A MANO 360° (contra una escuadra o una
+#  marca en el piso) y anotar lo que marca -> GYRO_SCALE = 360 / lectura.
 
 import event, time, math, cyberpi, mbot2
 
@@ -40,34 +40,48 @@ rumbo_cero = 0.0
 
 
 # ---------------------------------------------------------------- motores y sensores
+## @brief Velocidad de cada oruga en rpm (+ = adelante; EM2 va al revés).
+#  @param izq rpm de la oruga izquierda.
+#  @param der rpm de la oruga derecha.
 def motores(izq, der):
-    """rpm de cada oruga, + = adelante (EM2 va al revés)."""
     mbot2.EM_set_speed(izq, "EM1")
     mbot2.EM_set_speed(-der, "EM2")
 
 
+## @brief Detiene las dos orugas.
 def parar():
     mbot2.EM_stop("EM1")
     mbot2.EM_stop("EM2")
 
 
+## @brief Rumbo del giroscopio.
+#  @return Grados acumulados, + = a la DERECHA (aplica GYRO_SCALE y el cero de la prueba a mano).
 def rumbo():
-    """Grados acumulados, + = giro a la DERECHA (como el ángulo de girar())."""
     return -cyberpi.get_rotation('z') * GYRO_SCALE - rumbo_cero
 
 
+## @brief Avance de cada oruga desde el arranque.
+#  @return (izquierda, derecha) en cm, + = adelante.
 def orugas_cm():
-    """(izquierda, derecha) en cm desde el arranque, + = adelante."""
     return mbot2.EM_get_angle("EM1") * K_IZQ, -mbot2.EM_get_angle("EM2") * K_DER
 
 
+## @brief Limita un valor a un rango.
+#  @param v Valor.
+#  @param lo Mínimo.
+#  @param hi Máximo.
+#  @return v recortado a [lo, hi].
 def limitar(v, lo, hi):
     return lo if v < lo else hi if v > hi else v
 
 
 # ---------------------------------------------------------------- movimientos
+## @brief Movimiento por tiempo (el del programa original; se deja para pruebas manuales).
+#  @param vel_m1 rpm de EM1 (izquierda).
+#  @param vel_m2 rpm de EM2 (derecha).
+#  @param duracion Segundos.
+#  @return True si terminó; False si se detuvo con B.
 def mover_motores(vel_m1, vel_m2, duracion):
-    """Movimiento por tiempo (el del programa original; se deja para pruebas manuales)."""
     mbot2.EM_set_speed(vel_m1, "EM1")
     mbot2.EM_set_speed(-vel_m2, "EM2")
     inicio = time.time()
@@ -80,9 +94,13 @@ def mover_motores(vel_m1, vel_m2, duracion):
     return True
 
 
+## @brief Avanza una distancia por encoders, sosteniendo el rumbo con el giroscopio.
+#  @details Arranca y frena suave (RAMPA_S).
+#  @param cm cm (negativo = atrás).
+#  @param rpm rpm de avance.
+#  @param rumbo_obj Rumbo a sostener (por omisión, el de ahora).
+#  @return True si recorrió la distancia.
 def avanzar_cm(cm, rpm=50, rumbo_obj=None):
-    """Avanza `cm` (negativo = atrás) por encoders, sosteniendo el rumbo con el giroscopio.
-    rumbo_obj: rumbo a sostener (por omisión, el de ahora). Arranca y frena suave."""
     if rumbo_obj is None:
         rumbo_obj = rumbo()
     signo = 1 if cm >= 0 else -1
@@ -115,9 +133,13 @@ def avanzar_cm(cm, rpm=50, rumbo_obj=None):
     return True
 
 
+## @brief Gira en el lugar con el giroscopio (+ = derecha).
+#  @details Frena al acercarse y termina corrigiendo hasta quedar a menos de TOL_GIRO.
+#  @param angulo Grados a girar.
+#  @param rpm_max rpm máximas.
+#  @param timeout s máximos.
+#  @return True si llegó al ángulo.
 def girar(angulo, rpm_max=40, timeout=6):
-    """Gira `angulo` grados en el lugar (+ = derecha) con el giroscopio: frena al acercarse
-    y corrige hasta quedar a menos de TOL_GIRO. No reinicia el giroscopio."""
     meta = rumbo() + angulo
     quieto = 0
     inicio = time.time()
@@ -144,8 +166,11 @@ def girar(angulo, rpm_max=40, timeout=6):
     return False
 
 
+## @brief Gira hasta un rumbo absoluto (0 = como se encendió o se puso en 0 con B).
+#  @param rumbo_obj Rumbo objetivo en grados.
+#  @param rpm_max rpm máximas.
+#  @return True si llegó.
 def girar_a(rumbo_obj, rpm_max=40):
-    """Gira hasta el rumbo absoluto `rumbo_obj` (0 = como se encendió o se puso en 0 con B)."""
     err = rumbo_obj - rumbo()
     while err > 180:
         err -= 360
@@ -155,6 +180,10 @@ def girar_a(rumbo_obj, rpm_max=40):
 
 
 # ---------------------------------------------------------------- pantalla
+## @brief Muestra un texto centrado en la pantalla.
+#  @param texto Texto.
+#  @param tam Tamaño de letra.
+#  @param espera Segundos a esperar después.
 def mensaje(texto, tam=12, espera=0.0):
     cyberpi.display.clear()
     cyberpi.display.show_label(texto, tam, "center")
@@ -162,13 +191,16 @@ def mensaje(texto, tam=12, espera=0.0):
         time.sleep(espera)
 
 
+## @brief Muestra los botones en la pantalla.
 def menu():
     cyberpi.display.clear()
     cyberpi.display.show_label("A=Prueba B=Stop", 10, "top")
 
 
+## @brief Corre una prueba si no hay otra corriendo (la detiene B).
+#  @param nombre Nombre que se muestra en la pantalla.
+#  @param accion Función sin argumentos que hace la prueba.
 def correr(nombre, accion):
-    """Corre una prueba si no hay otra corriendo."""
     global ejecutar, detener_ejecucion
     if ejecutar:
         return
@@ -185,6 +217,7 @@ def correr(nombre, accion):
 # ==============================================
 # Al encender el robot
 # ==============================================
+## @brief Al encender: muestra los botones de las pruebas.
 @event.start
 def on_start():
     mensaje("ROVER LISTO", 14, 1)
@@ -196,6 +229,8 @@ def on_start():
 # ==============================================
 # La del programa original: a 50 rpm la oruga avanza ~10.9 cm/s, así que 4 s = 44 cm,
 # 8 s = 88 cm y 2 s = 22 cm. Cada tramo recto sostiene el rumbo con el que terminó el giro.
+## @brief Secuencia de prueba del botón A (ver la lista de pasos al inicio del archivo).
+#  @return True si terminó todos los pasos.
 def secuencia():
     pasos = [lambda: avanzar_cm(44), lambda: girar(-90), lambda: avanzar_cm(88),
              lambda: avanzar_cm(-44), lambda: girar(-90), lambda: avanzar_cm(22),
@@ -206,6 +241,7 @@ def secuencia():
     return True
 
 
+## @brief Botón A: secuencia de prueba.
 @event.is_press('a')
 def test_secuencia():
     correr("SECUENCIA", secuencia)
@@ -214,26 +250,31 @@ def test_secuencia():
 # ==============================================
 # JOYSTICK - GIROS DE PRUEBA
 # ==============================================
+## @brief Joystick arriba: gira 45° a la derecha.
 @event.is_press('up')
 def girar_45_derecha():
     correr("GIRAR 45 DER", lambda: girar(45, 35))
 
 
+## @brief Joystick abajo: gira 90° a la izquierda.
 @event.is_press('down')
 def girar_90_izquierda():
     correr("GIRAR 90 IZQ", lambda: girar(-90, 35))
 
 
+## @brief Joystick izquierda: gira 30° a la derecha.
 @event.is_press('left')
 def girar_30_derecha():
     correr("GIRAR 30 DER", lambda: girar(30, 30))
 
 
+## @brief Joystick derecha: gira 180°.
 @event.is_press('right')
 def girar_180():
     correr("GIRAR 180", lambda: girar(180, 45))
 
 
+## @brief Joystick centro: gira 360°.
 @event.is_press('middle')
 def girar_360():
     correr("GIRAR 360", lambda: girar(360, 50))
@@ -242,6 +283,7 @@ def girar_360():
 # ==============================================
 # BOTON B - DETENER / RUMBO EN 0
 # ==============================================
+## @brief Botón B: detiene la prueba en curso; con el robot quieto pone el rumbo en 0.
 @event.is_press('b')
 def detener():
     global detener_ejecucion, rumbo_cero
@@ -258,6 +300,7 @@ def detener():
 # ==============================================
 # PROGRAMA PRINCIPAL: en reposo muestra el rumbo (prueba a mano del giroscopio)
 # ==============================================
+## @brief Ciclo en reposo: muestra el rumbo del giroscopio en grande (prueba a mano).
 @event.start
 def main():
     while True:

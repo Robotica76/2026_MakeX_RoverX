@@ -1,8 +1,11 @@
-# Rover X 2026: ejecutor del área automática.
-#
-# Ejecuta las misiones de missions.py desde el nivel de inicio elegido, muestra el avance
-# en la pantalla del CyberPi y se detiene si se acaba el tiempo, si falla una misión
-# crítica o si se presiona A (cfg.ABORT_BUTTON: parar para pedir reinicio).
+## @file autonomous.py
+#  @brief Ejecutor del área automática: corre las misiones de missions.py.
+#  @details Ejecuta las misiones desde el nivel de inicio elegido (un TRAMO), muestra el avance en
+#  la pantalla del CyberPi y se detiene al terminar el tramo, si se acaba el tiempo, si falla una
+#  misión crítica o si se presiona A (cfg.ABORT_BUTTON: parar para pedir reinicio).
+#  Cada misión es una lista de PASOS (tuplas); run_step() ejecuta uno. La lista de pasos y su
+#  formato están en missions.py. También tiene la pantalla de inicio (choose_level) y las misiones
+#  de tarjetas de colores (scan_cards, drop_red) y meta (stop_in).
 
 import hal
 import config as cfg
@@ -28,9 +31,11 @@ next_level = 1           # nivel que conviene elegir después del tramo
 completed = set()        # misiones logradas en este encendido (se saltan al repetir un tramo)
 
 
+## @brief Borra todo lo que una corrida anterior pudo dejar.
+#  @details Tarjetas, resultados, último acercamiento, referencia de rumbo y estado del seguidor.
+#  Al relanzar el autónomo sin apagar el robot, una referencia vieja movía el primer giro
+#  (simulador).
 def reset_state():
-    """Todo lo que una corrida anterior pudo dejar (al relanzar el autónomo desde el menú sin
-    apagar el robot, una referencia vieja movía el primer giro; lo mostró el simulador)."""
     global cards, results, last_advance, heading_ref, goal_entry
     goal_entry = None
     cards = []
@@ -43,14 +48,23 @@ def reset_state():
     lf._after_turn = False
 
 
+## @brief Valor de un argumento de paso.
+#  @details En las misiones un valor puede ser un número o el NOMBRE de un parámetro de cfg.P; el
+#  nombre se lee al ejecutar, así lo que se cambie en el menú se aplica sin recargar el programa.
+#  @param x Número o nombre de parámetro (str).
+#  @return El número, o cfg.P[x].
 def val(x):
-    """Número tal cual, o el valor actual del parámetro cfg.P con ese nombre."""
     if isinstance(x, str):
         return cfg.P[x]
     return x
 
 
 # ---------------------------------------------------------------- condiciones de línea
+## @brief Convierte la condición de un paso "line" en una función de parada.
+#  @details ("junction", n, tipo), ("color", nombre), ("color_cm", color, cm), ("cm", d),
+#  ("leave", color), ("obstacle", cm), ("end",), ("pitch",), ("head", rumbo, tolerancia).
+#  @param spec Tupla de la condición.
+#  @return Función cond(bits, junction) para linefollow.follow_until().
 def make_cond(spec):
     kind = spec[0]
     if kind == "junction":
@@ -79,17 +93,23 @@ def make_cond(spec):
 
 
 # ---------------------------------------------------------------- misiones 11 y 12
+## @brief Posición de la tarjeta roja en la lista leída.
+#  @param found Lista [(color, odometría)].
+#  @return Índice 0..5, o -1 si no hay roja.
 def red_index(found):
-    """Posición (0..5) de la tarjeta roja, o -1."""
     for i in range(len(found)):
         if found[i][0] == "red":
             return i
     return -1
 
 
+## @brief Registra una tarjeta si no es una ya vista.
+#  @details Mismo color a menos de 6 cm = la misma (la tarjeta mide 4.7 cm y al retroceder y volver
+#  a pasar se lee en sus dos orillas). La muestra en los LEDs y la pantalla.
+#  @param c Color leído.
+#  @param odo Odometría absoluta (cm) al leerla.
+#  @return True si era nueva.
 def _note_card(c, odo):
-    """Registra la tarjeta si no es una ya vista (mismo color a menos de 6 cm: la tarjeta mide
-    4.7 cm y al retroceder y volver a pasar se lee en sus dos orillas)."""
     for c0, o0 in cards:
         if c0 == c and abs(o0 - odo) < 6:
             return False
@@ -98,9 +118,10 @@ def _note_card(c, odo):
     return True
 
 
+## @brief Retrocede recto leyendo tarjetas.
+#  @details Al volver a la línea después de rodear la torre, la sonda ya pasó la primera tarjeta.
+#  @param back_cm cm a retroceder.
 def _scan_back(back_cm):
-    """Retrocede recto (rumbo con el giroscopio) leyendo tarjetas: al volver a la línea
-    después de rodear la torre, la sonda ya pasó la primera tarjeta."""
     start = hal.odo_abs()
     h0 = hal.heading()
     t0 = hal.now()
@@ -122,9 +143,12 @@ def _scan_back(back_cm):
     hal.stop()
 
 
+## @brief Misión 11: sigue la línea despacio y registra cada tarjeta de color.
+#  @details Para al ver la X azul de la meta (azul por más de GOAL_RUN_CM seguidos; una tarjeta
+#  mide ~4.7 cm) o al recorrer CARD_SCAN_MAX_CM. El azul de la meta no cuenta como tarjeta.
+#  @param back_cm Antes, retrocede eso leyendo (tarjetas que quedaron detrás de la sonda).
+#  @return True si leyó al menos una tarjeta.
 def scan_cards(back_cm=0):
-    """Sigue la línea despacio y registra cada tarjeta de color (color + odometría).
-    back_cm: antes, retrocede eso leyendo (tarjetas que quedaron detrás de la sonda)."""
     global cards
     cards = []
     if back_cm > 0:
@@ -169,6 +193,10 @@ def scan_cards(back_cm=0):
     return len(cards) > 0
 
 
+## @brief Misión 12 (omitida por ahora): deja la pelota en la casilla de la tarjeta roja.
+#  @details Se coloca frente a la tarjeta roja, gira hacia la barra (bar_side), baja la garra a
+#  h_bar, avanza bar_reach, suelta y regresa a la línea.
+#  @return True si la dejó.
 def drop_red():
     i = red_index(cards)
     if i < 0:
@@ -186,10 +214,12 @@ def drop_red():
     return ok
 
 
+## @brief Misión 13: para completamente dentro de una zona (meta).
+#  @details Avanza zone_extra() contado desde que las sondas ENTRARON a la zona; si la lectura de
+#  tarjetas ya entró, no vuelve a contar desde aquí (antes se pasaba y salía por el otro lado).
+#  @param color Color de la zona.
+#  @return True si quedó dentro.
 def stop_in(color):
-    """Para completamente dentro de la zona: avanza zone_extra() contado desde que las sondas
-    ENTRARON a la zona (si la lectura de tarjetas ya entró, no se vuelve a contar desde aquí;
-    antes el robot se pasaba y salía por el otro lado: lo mostró el simulador)."""
     global goal_entry
     if goal_entry is None:
         start = {"odo": None}
@@ -209,27 +239,37 @@ def stop_in(color):
     return True
 
 
+## @brief Avance de un acercamiento; lo guarda para que "retreat" regrese lo mismo.
+#  @param cm cm a avanzar.
+#  @return True si recorrió la distancia.
 def _advance(cm):
     global last_advance
     last_advance = cm
     return motion.straight(cm, cfg.P["v_slow"])
 
 
+## @brief Deja la garra sobre el centro de un pedestal medido desde el último cruce.
+#  @param h Altura de la garra (número o nombre de parámetro).
+#  @param from_cross cm del cruce al centro del pedestal (número o nombre de parámetro).
+#  @return True si avanzó.
 def approach_pedestal(h, from_cross):
-    """Garra sobre el centro de un pedestal que está a from_cross cm del último cruce."""
     traveled = 0
     if lf.last_junction is not None:
         traveled = hal.odo_abs() - lf.last_junction[1]
     return _advance(geo.pedestal_advance(val(h), val(from_cross), traveled))
 
 
+## @brief Deja la garra sobre un objeto al frente.
+#  @param h Altura de la garra.
+#  @param dist cm del centro de giro al centro del objeto.
+#  @return True si avanzó.
 def approach_object(h, dist):
-    """Garra sobre un objeto cuyo centro está a dist cm del centro de giro, al frente."""
     return _advance(geo.reach_advance(val(dist), val(h)))
 
 
+## @brief Sigue la línea hasta quedar a side_margin de la torre (desde el borde de la zona verde).
+#  @return True si llegó.
 def to_tower():
-    """Sigue la línea hasta quedar a side_margin de la torre (referencia: borde de la zona verde)."""
     traveled = 0
     if lf.last_edge is not None:
         traveled = hal.odo_abs() - lf.last_edge
@@ -245,15 +285,26 @@ RAMP_FLAT_DEG = 6.0     # al pie, en plano: corregir el desvío lateral antes de
 RAMP_MAX_DEG = 1.5      # en la rampa angosta solo sostener: torcerse 3° saca una esquina 0.5 cm
 
 
+## @brief Rumbo de mapa -> valor de hal.heading() al que hay que llegar por el camino corto.
+#  @details hal.heading() acumula vueltas; sin normalizar, una recta podía "sostener" un rumbo a
+#  360° del real y torcerse (simulador).
+#  @param deg Rumbo de mapa (0 este, 90 sur, 180 oeste, -90 norte).
+#  @return Grados en la escala de hal.heading().
 def map_target(deg):
-    """Rumbo de mapa -> valor de hal.heading() al que hay que llegar por el camino corto.
-    hal.heading() acumula vueltas; sin normalizar, una recta podía "sostener" un rumbo a 360°
-    del real y torcerse (lo mostró el simulador)."""
     now = hal.heading()
     return now + motion.wrap180(deg - heading_ref - now)
 
 
 # ---------------------------------------------------------------- pasos
+## @brief Ejecuta UN paso de una misión.
+#  @details El primer elemento de la tupla dice qué hacer: "line", "jturn", "straight", "center",
+#  "turn", "ref", "head", "drive", "pose", "square", "track_line", "diag", "track", "back_to",
+#  "ramp_up", "fix_line", "bias", "fix", "pivot", "goto", "edge", "cross", "seek", "spin",
+#  "approach_ped", "approach_obj", "retreat", "to_tower", "climb", "line_ref", "if_placed",
+#  "if_skipped", "if_ran", "if_start", "crest", "stairs", "claw", "arm", "hold", "detour",
+#  "cards", "drop_red", "stop_in", "wait". El formato de cada uno está en missions.py.
+#  @param step Tupla del paso.
+#  @return True si el paso terminó bien.
 def run_step(step):
     global heading_ref
     kind = step[0]
@@ -572,6 +623,9 @@ def run_step(step):
     raise ValueError("paso desconocido: %s" % kind)
 
 
+## @brief Ejecuta todos los pasos de una misión.
+#  @param m Dict de la misión (de missions.MISSIONS).
+#  @return True si todos los pasos terminaron bien (False al primer paso que falla o si se pidió parar).
 def run_mission(m):
     hal.show("M%d %s" % (m["id"], m["name"]), line=1)
     for step in m["steps"]:
@@ -582,13 +636,16 @@ def run_mission(m):
     return True
 
 
+## @brief Corre el TRAMO que empieza en start_level.
+#  @details Con cfg.SEGMENTS el robot se detiene al terminar el tramo (misión con "end_level") o al
+#  fallar una misión crítica; next_level queda con el nivel que conviene elegir después.
+#  @param start_level Nivel elegido en la pantalla de inicio (1..4).
+#  @param budget_s Tiempo máximo (por defecto cfg.AUTO_BUDGET_S).
+#  @param t_start Momento de inicio (por defecto ahora).
+#  @param skip Misiones ya logradas en este encendido: solo se saltan las de manipulación (las de
+#  navegación, críticas, se repiten porque llevan al robot a donde empieza la siguiente).
+#  @return Puntos estimados del tramo.
 def run(start_level=1, budget_s=None, t_start=None, skip=None):
-    """Corre el TRAMO que empieza en start_level. Devuelve los puntos estimados.
-
-    Con cfg.SEGMENTS el robot se detiene al terminar el tramo (misión con "end_level") o al
-    fallar una misión crítica; next_level queda con el nivel que conviene elegir después.
-    skip: misiones ya logradas en este encendido; solo se saltan las de manipulación (las de
-    navegación, críticas, se repiten porque llevan al robot a donde empieza la siguiente)."""
     global run_level, placed, next_level, current_level
     if budget_s is None:
         budget_s = cfg.AUTO_BUDGET_S
@@ -642,8 +699,9 @@ def run(start_level=1, budget_s=None, t_start=None, skip=None):
 
 
 # ---------------------------------------------------------------- elegir nivel de inicio
+## @brief Nivel según el color de la zona de inicio bajo el robot.
+#  @return 1..4 (rojo, amarillo, azul, verde); 1 si no se reconoce.
 def detect_level():
-    """Lee el color de la zona de inicio bajo el robot (rojo/amarillo/azul/verde)."""
     for probe in ("L1", "R1"):
         lvl = colors.zone_level(colors.read_stable(probe))
         if lvl:
@@ -651,10 +709,12 @@ def detect_level():
     return 1
 
 
+## @brief Pantalla de inicio del autónomo.
+#  @details Joystick del CyberPi: elige el nivel (cfg.LEVEL_KEYS: arriba 1, abajo 2, izquierda 3,
+#  derecha 4). B (cfg.START_BUTTON): arrancar el tramo. Centro (cfg.MENU_BUTTON): menú de ajustes.
+#  @param level Nivel sugerido (None = leerlo del color de la zona).
+#  @return Nivel elegido 1..4, o 0 = ir al menú de ajustes.
 def choose_level(level=None):
-    """Pantalla de inicio del autónomo. Joystick: elige el nivel (cfg.LEVEL_KEYS: arriba 1,
-    abajo 2, izquierda 3, derecha 4). START_BUTTON (B): arrancar el tramo. Centro del joystick:
-    menú de ajustes. Devuelve el nivel, o 0 = ajustes."""
     if level is None:
         level = detect_level()
     hal.wait(0.3)

@@ -23,6 +23,7 @@ inicio con el siguiente nivel ya elegido.
 
 | Carpeta | Contenido |
 | --- | --- |
+| [software/core/pista.py](software/core/pista.py) | **Medidas de la pista** que usa el autónomo, por nivel (`nivel_1_...` a `nivel_4_...`): lo primero que hay que medir y ajustar en la pista real |
 | [software/core](software/core) | `config.py` (constantes y parámetros ajustables `P`), `geometry.py` (cuentas con la geometría del robot), `hal.py` (única capa que llama a la API del mBot2; lectura analógica de la línea), `colors.py`, `settings.py` (menú de ajustes, calibración, guardado) |
 | [software/controls](software/controls) | `linefollow.py` (PID, cruces con memoria, giros en cruce, verde opcional), `motion.py` (giros y rectas con giroscopio, rampas, escalera, rodeo), `gripper.py` |
 | [software/autonomous](software/autonomous) | `missions.py` (ruta como datos, misiones 1 a 12 y meta), `autonomous.py` (ejecutor y elección de nivel) |
@@ -32,6 +33,8 @@ inicio con el siguiente nivel ya elegido.
 | [tools/robot/api_check.py](tools/robot/api_check.py) | Programa de prueba y calibración para el robot |
 | [tools/scripts/bundle_for_mblock.py](tools/scripts/bundle_for_mblock.py) | Junta todos los módulos en un solo archivo para mBlock |
 | [simulation](simulation/README.md) | Simulador del área automática: pista del reglamento, física, juez, Monte Carlo y reproducción HTML |
+| [Guia_Calibracion.pdf](docs/software_doc/Guia_Calibracion.pdf) | **Guía rápida de calibración** (una hoja para los alumnos): calibrar el robot, medidas de la pista y qué cambiar según el síntoma |
+| [docs/software_doc](docs/software_doc/README.md) | Capítulo **Software** en PDF, generado de los comentarios Doxygen del código ([`Software.pdf`](docs/software_doc/Software.pdf)) |
 | [tests](tests) | Pruebas en PC con `cyberpi` / `mbot2` / `mbuild` / `gamepad` falsos |
 | [docs](docs) | [Resumen del reglamento](docs/reglamento.md), [hoja de medidas del robot](docs/medidas_robot.md), [geometría y ajustes en pista](docs/geometria.md), [estrategia](docs/estrategia.md), [API del mBot2](docs/api_mbot2.md), [control manual](docs/control_manual.md) |
 | [resources/reglamento](resources/reglamento) | PDF del reglamento y vistas de la arena |
@@ -70,7 +73,7 @@ python3 tools/scripts/bundle_for_mblock.py --all
 2. Corregir los signos de [`config.py`](software/core/config.py) (`HEADING_SIGN`, `PITCH_SIGN`).
 3. Medir la geometría del robot y el brazo ([docs/geometria.md](docs/geometria.md)) y ponerla en `P`, o ajustarla desde el menú.
 4. En la pista: menú → *Calibrar linea*; ajustar `kp`, `kd` y `v_line`; *Probar recta 50* para `slip`.
-5. Medir en la pista las distancias de referencia a los pedestales y a la torre (menú → *Pista*).
+5. Medir en la pista las medidas marcadas `MEDIR` en [`pista.py`](software/core/pista.py), nivel por nivel, y regenerar `mblock/`.
 6. Contar los cruces del nivel 1 y escribir `ROUTE_L1` en [`missions.py`](software/autonomous/missions.py); ajustar la ruta nivel por nivel.
 
 ## Reglas de código

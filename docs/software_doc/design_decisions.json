@@ -1,0 +1,59 @@
+{
+  "intro": "Este capítulo documenta el software del robot Rover X (mBot2 con kit Rover, MicroPython en el CyberPi) del equipo Robótica 76 para MakeX 2026. Se genera automáticamente a partir de los comentarios Doxygen del código (carpeta software/) y de los datos del propio programa: misiones, medidas de la pista y parámetros ajustables.",
+  "decisions": [
+    {
+      "id": "SW-DEC-001",
+      "title": "Dos programas, cada uno en un solo archivo",
+      "decision": "El autónomo (rover_x_auto.py) y el manual (rover_x_manual.py) son programas separados. El código se escribe en módulos (software/) y tools/scripts/bundle_for_mblock.py los junta en un solo archivo por programa (mblock/).",
+      "rationale": "mBlock sube un solo archivo de Python al CyberPi. Los módulos hacen el código legible y se prueban por separado en la PC; el archivo empaquetado solo importa módulos de Makeblock y de MicroPython (lo verifica una prueba)."
+    },
+    {
+      "id": "SW-DEC-002",
+      "title": "Capa de hardware única (hal.py)",
+      "decision": "Solo hal.py llama a la API del mBot2 (cyberpi, mbot2, mbuild, gamepad), con convenciones fijas de signos.",
+      "rationale": "Un signo mal montado (motor, giroscopio, sensor de línea) se corrige en un solo lugar (config.py) y en la PC se reemplaza el hardware por módulos falsos: el mismo programa corre en las pruebas y en el simulador."
+    },
+    {
+      "id": "SW-DEC-003",
+      "title": "La ruta como datos",
+      "decision": "Las misiones son listas de pasos (tuplas) en missions.py; autonomous.run_step() sabe ejecutar cada tipo de paso.",
+      "rationale": "Cambiar la ruta no requiere tocar la lógica de control. Los argumentos pueden ser nombres de parámetros de cfg.P, que se leen al ejecutar: lo ajustado en el menú del CyberPi se aplica sin recargar el programa."
+    },
+    {
+      "id": "SW-DEC-004",
+      "title": "Medidas de la pista en un solo archivo",
+      "decision": "Todas las distancias, puntos del mapa y rumbos que dependen de la pista están en pista.py, por nivel y con nombres nivel_N_...",
+      "rationale": "Son lo primero que hay que medir y ajustar en la pista real. Cada medida está marcada MEDIR o MEDIDO para saber qué falta."
+    },
+    {
+      "id": "SW-DEC-005",
+      "title": "Autónomo por tramos",
+      "decision": "En la pantalla de inicio se elige el nivel con el joystick y B corre solo el tramo de ese nivel; el robot se detiene al terminarlo (o al presionar A).",
+      "rationale": "Así lo usa el equipo en competencia: tras una falla se pide reinicio en la zona del nivel y se repite solo ese tramo. Las misiones de manipulación ya logradas se saltan."
+    },
+    {
+      "id": "SW-DEC-006",
+      "title": "Sin ultrasónico: distancias desde referencias del piso",
+      "decision": "Los acercamientos a pedestales y la torre se miden con los encoders desde un cruce de línea o el borde de una zona de color.",
+      "rationale": "El diseño del robot no lleva ultrasónico. Los cruces y bordes son referencias fijas que reinician el error acumulado."
+    },
+    {
+      "id": "SW-DEC-007",
+      "title": "Odometría robusta al patinaje",
+      "decision": "odometry.py integra encoders y giroscopio; cuando el giroscopio y los encoders no coinciden, mide el avance con la oruga que no patinó.",
+      "rationale": "En la zona de obstáculos los recortes de cartón hacen patinar una oruga: el robot avanza 8 a 28 cm menos de lo que cuentan los encoders (simulador)."
+    },
+    {
+      "id": "SW-DEC-008",
+      "title": "Cruces con memoria",
+      "decision": "Un cruce se arma con lo que vean las sondas exteriores dentro de una ventana de avance (cross_win cm), no con las dos a la vez.",
+      "rationale": "Con una línea de 10 a 30 mm y el robot oscilando, las dos sondas exteriores casi nunca ven negro al mismo tiempo."
+    },
+    {
+      "id": "SW-DEC-009",
+      "title": "Control contra volcadura",
+      "decision": "Inclinado, hal.drive solo deja subir la potencia de a poco (tip_slew) y suma asistencia si el robot no avanza; el brazo baja al frente al subir.",
+      "rationale": "Un arranque brusco en rampa o escalera pasa el centro de masa detrás de las orugas y el robot se voltea hacia atrás."
+    }
+  ]
+}

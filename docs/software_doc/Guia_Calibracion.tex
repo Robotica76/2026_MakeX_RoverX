@@ -1,0 +1,128 @@
+% ARCHIVO GENERADO por generate_guia_calibracion.py -- no editar a mano.
+\documentclass[9pt]{extarticle}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{textcomp}
+\usepackage[spanish,es-noshorthands]{babel}
+\usepackage[landscape,letterpaper,margin=0.9cm,top=0.8cm,bottom=0.8cm]{geometry}
+\usepackage{multicol}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{amssymb}
+\setlength{\columnsep}{0.6cm}
+\setlength{\parindent}{0pt}
+\pagestyle{empty}
+\renewcommand{\arraystretch}{1.05}
+\newcommand{\hd}[1]{\par\smallskip{\color{blue!60!black}\large\bfseries #1}\par\smallskip}
+\begin{document}
+{\LARGE\bfseries Rover X -- Guía rápida de calibración}\hfill
+{\small Orden: \textbf{1} calibrar el robot $\rightarrow$ \textbf{2} medir la pista
+$\rightarrow$ \textbf{3} probar y corregir. Cambiar \textbf{una cosa a la vez} y anotarla.}
+\par\vspace{2pt}\hrule\vspace{4pt}
+{\small Dónde se cambia: los parámetros con $^{\scriptscriptstyle M}$ están en el
+\textbf{menú del CyberPi} (programa autónomo, \textbf{centro del joystick}; $\uparrow\downarrow$
+elegir, $\leftarrow\rightarrow$ valor, A probar, \textbf{B guardar}). Lo demás, en
+\texttt{software/core/config.py} o \texttt{software/core/pista.py}; después correr
+\texttt{python3 tools/scripts/bundle\_for\_mblock.py -{}-all} y volver a cargar
+\texttt{mblock/rover\_x\_auto.py}.}
+\begin{multicols}{3}
+\raggedcolumns
+\hd{1. Calibrar el robot}
+{\footnotesize Una vez, y otra si se cambia algo del robot (orugas, brazo, sensor).}\par
+\footnotesize\begin{enumerate}[leftmargin=1.2em,itemsep=2pt,topsep=2pt]
+\item \textbf{Signos.} tools/robot/api\_check.py, páginas Motores, IMU y Línea: avanzar debe dar encoders +, girar a la derecha rumbo +, nariz arriba pitch +.\\ $\Rightarrow$ \texttt{LEFT\_\allowbreak{}SIGN} \texttt{RIGHT\_\allowbreak{}SIGN} \texttt{HEADING\_\allowbreak{}SIGN} \texttt{PITCH\_\allowbreak{}SIGN} \texttt{LINE\_\allowbreak{}SIGN} (config.py)
+\item \textbf{Distancia.} Menú > Probar recta 50. Medir con cinta lo que avanzó.\\ $\Rightarrow$ \texttt{slip}$^{\scriptscriptstyle M}$ = real / 50
+\item \textbf{Orugas.} Prueba de 1 m de mBlock: anotar lo que avanzó cada oruga.\\ $\Rightarrow$ \texttt{lr\_\allowbreak{}ratio}$^{\scriptscriptstyle M}$ = izquierda / derecha
+\item \textbf{Giroscopio.} calibrations.py: B (rumbo 0), girar el robot A MANO una vuelta contra una escuadra y leer la pantalla.\\ $\Rightarrow$ \texttt{gyro\_\allowbreak{}scale}$^{\scriptscriptstyle M}$ = 360 / lectura
+\item \textbf{Giros.} Menú > Probar giro 90. Medir con transportador.\\ $\Rightarrow$ se pasa: bajar \texttt{turn\_\allowbreak{}kp}$^{\scriptscriptstyle M}$; no termina: subir \texttt{v\_\allowbreak{}turn\_\allowbreak{}min}$^{\scriptscriptstyle M}$
+\item \textbf{Derrape.} calibrations.py, joystick al centro: círculo de 40 cm. Medir el diámetro real.\\ $\Rightarrow$ \texttt{skid} (más chico o más grande que 40)
+\item \textbf{Línea.} Robot centrado sobre la línea: Menú > Calibrar linea. Revisar con Ver sensores (blanco \textasciitilde{}0, negro \textasciitilde{}1).\\ $\Rightarrow$ se guarda solo; umbral \texttt{dark\_\allowbreak{}th}$^{\scriptscriptstyle M}$
+\item \textbf{Garra.} Menú > Garra: con < > cambiar y A para probar.\\ $\Rightarrow$ \texttt{claw\_\allowbreak{}open}$^{\scriptscriptstyle M}$ abierta, \texttt{claw\_\allowbreak{}cube}$^{\scriptscriptstyle M}$ cerrada en el cubo
+\item \textbf{Brazo.} Con regla: altura y adelanto del centro de la garra con el servo a 0, 45 y 90.\\ $\Rightarrow$ \texttt{arm\_\allowbreak{}h0}$^{\scriptscriptstyle M}$ \texttt{arm\_\allowbreak{}x0}$^{\scriptscriptstyle M}$ \texttt{arm\_\allowbreak{}h45}$^{\scriptscriptstyle M}$ \texttt{arm\_\allowbreak{}x45}$^{\scriptscriptstyle M}$ \texttt{arm\_\allowbreak{}h90}$^{\scriptscriptstyle M}$ \texttt{arm\_\allowbreak{}x90}$^{\scriptscriptstyle M}$
+\item \textbf{Colores.} api\_check.py página Colores sobre cada color de la pista.\\ $\Rightarrow$ \texttt{color\_\allowbreak{}mode} = 1 y \texttt{COLOR\_\allowbreak{}REF} (config.py)
+\end{enumerate}
+\hd{2. Medir la pista}
+\footnotesize Con flexómetro, en cm. Escribir el valor en \texttt{pista.py} y cambiar \texttt{MEDIR} por \texttt{MEDIDO}. Mapa: \textbf{x} hacia la derecha desde la orilla izquierda, \textbf{y} hacia abajo desde la orilla de arriba (vista superior del reglamento). Rumbo 0 = derecha, 90 = abajo. \textbf{Centro de giro} = punto medio de las orugas (las sondas van 5.2 cm delante). Cada medida está explicada en \texttt{pista.py}.\par\smallskip
+\scriptsize
+\columnbreak
+\textbf{NIVEL 1 (zona roja)}\par
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.66\columnwidth}>{\raggedleft\arraybackslash}p{0.2\columnwidth}l@{}}
+\texttt{inicio\_\allowbreak{}x/y} & 12.6, 12.9 & $\square$ \\
+\texttt{inicio\_\allowbreak{}a\_\allowbreak{}linea\_\allowbreak{}inferior\_\allowbreak{}cm} & 33.8 & $\square$ \\
+\texttt{linea\_\allowbreak{}inferior\_\allowbreak{}y} & 43.2 & $\square$ \\
+\texttt{cruce\_\allowbreak{}a\_\allowbreak{}cruce\_\allowbreak{}del\_\allowbreak{}cubo\_\allowbreak{}cm} & 59.0 & $\square$ \\
+\texttt{cruce\_\allowbreak{}a\_\allowbreak{}pedestal\_\allowbreak{}cm}$^{\scriptscriptstyle M}$ & 12.4 & $\square$ \\
+\texttt{linea\_\allowbreak{}del\_\allowbreak{}cubo\_\allowbreak{}y} & 49.0 & $\square$ \\
+\texttt{cubo\_\allowbreak{}a\_\allowbreak{}linea\_\allowbreak{}de\_\allowbreak{}rampa\_\allowbreak{}cm} & 18.4 & $\square$ \\
+\texttt{linea\_\allowbreak{}a\_\allowbreak{}pie\_\allowbreak{}de\_\allowbreak{}rampa\_\allowbreak{}cm} & 18.7 & $\square$ \\
+\end{tabular}\par\smallskip
+\textbf{NIVEL 2 (zona amarilla)}\par
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.66\columnwidth}>{\raggedleft\arraybackslash}p{0.2\columnwidth}l@{}}
+\texttt{t\_\allowbreak{}a\_\allowbreak{}pedestal\_\allowbreak{}cm} & 8.8 & $\square$ \\
+\texttt{colocado\_\allowbreak{}x/y} & 131.9, 30.4 & $\square$ \\
+\texttt{tras\_\allowbreak{}dejar\_\allowbreak{}cubo\_\allowbreak{}x/y} & 133.9, 26.8 & $\square$ \\
+\texttt{giro\_\allowbreak{}al\_\allowbreak{}pasillo\_\allowbreak{}x/y} & 134.2, 43.5 & $\square$ \\
+\texttt{abertura\_\allowbreak{}izquierda\_\allowbreak{}y} & 45.0 & $\square$ \\
+\texttt{abertura\_\allowbreak{}derecha\_\allowbreak{}y} & 15.9 & $\square$ \\
+\texttt{diagonal\_\allowbreak{}punto\_\allowbreak{}x/y} & 212.7, 16.0 & $\square$ \\
+\texttt{diagonal\_\allowbreak{}deteccion\_\allowbreak{}x/y} & 208.96, 17.82 & $\square$ \\
+\texttt{x\_\allowbreak{}al\_\allowbreak{}ver\_\allowbreak{}diagonal} & 218.6 & $\square$ \\
+\texttt{rampa\_\allowbreak{}centro\_\allowbreak{}x} & 228.15 & $\square$ \\
+\texttt{rampa\_\allowbreak{}linea\_\allowbreak{}x} & 228.6 & $\square$ \\
+\end{tabular}\par\smallskip
+\textbf{NIVEL 3 (zona azul)}\par
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.66\columnwidth}>{\raggedleft\arraybackslash}p{0.2\columnwidth}l@{}}
+\texttt{zona\_\allowbreak{}azul\_\allowbreak{}a\_\allowbreak{}dentro\_\allowbreak{}cm} & 19.2 & $\square$ \\
+\texttt{orilla\_\allowbreak{}zona\_\allowbreak{}azul\_\allowbreak{}x/y} & 228.8, 70.8 & $\square$ \\
+\texttt{orilla\_\allowbreak{}a\_\allowbreak{}prisma\_\allowbreak{}cm} & 3.6 & $\square$ \\
+\texttt{rumbo\_\allowbreak{}a\_\allowbreak{}zona\_\allowbreak{}punteada} & 107 & $\square$ \\
+\texttt{prisma\_\allowbreak{}a\_\allowbreak{}zona\_\allowbreak{}punteada\_\allowbreak{}cm} & 22.0 & $\square$ \\
+\texttt{frente\_\allowbreak{}escalera\_\allowbreak{}x/y} & 166.1, 96.4 & $\square$ \\
+\texttt{pelota\_\allowbreak{}linea\_\allowbreak{}a\_\allowbreak{}pedestal\_\allowbreak{}cm}$^{\scriptscriptstyle M}$ & 23.6 & $\square$ \\
+\texttt{pelota\_\allowbreak{}rumbo} & 113 & $\square$ \\
+\texttt{pelota\_\allowbreak{}rumbo\_\allowbreak{}de\_\allowbreak{}regreso} & -152 & $\square$ \\
+\end{tabular}\par\smallskip
+\textbf{NIVEL 4 (zona verde)}\par
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.66\columnwidth}>{\raggedleft\arraybackslash}p{0.2\columnwidth}l@{}}
+\texttt{escalera\_\allowbreak{}a\_\allowbreak{}dentro\_\allowbreak{}cm} & 8.0 & $\square$ \\
+\texttt{torre\_\allowbreak{}lado\_\allowbreak{}cm}$^{\scriptscriptstyle M}$ & 10.0 & $\square$ \\
+\texttt{zona\_\allowbreak{}verde\_\allowbreak{}a\_\allowbreak{}torre\_\allowbreak{}cm}$^{\scriptscriptstyle M}$ & 7.5 & $\square$ \\
+\texttt{pasar\_\allowbreak{}torre\_\allowbreak{}al\_\allowbreak{}oeste\_\allowbreak{}cm} & 37.0 & $\square$ \\
+\texttt{retroceso\_\allowbreak{}para\_\allowbreak{}tarjetas\_\allowbreak{}cm} & 7.0 & $\square$ \\
+\texttt{barra\_\allowbreak{}avance\_\allowbreak{}cm}$^{\scriptscriptstyle M}$ & 8.2 & $\square$ \\
+\end{tabular}\par\smallskip
+\columnbreak
+\hd{3. Si pasa esto, cambia esto}
+\footnotesize\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.47\columnwidth}>{\raggedright\arraybackslash}p{0.5\columnwidth}@{}}
+\textbf{Síntoma} & \textbf{Cambiar} \\\hline
+Todas las distancias salen cortas o largas & \texttt{slip}$^{\scriptscriptstyle M}$ (Probar recta 50) \\[1pt]
+La pantalla dice 90\textdegree{} pero en el piso giró otra cosa & \texttt{gyro\_\allowbreak{}scale}$^{\scriptscriptstyle M}$ \\[1pt]
+Gira de más u oscila al terminar un giro & bajar \texttt{turn\_\allowbreak{}kp}$^{\scriptscriptstyle M}$; subir \texttt{turn\_\allowbreak{}tol} \\[1pt]
+Se tuerce al avanzar recto & subir \texttt{head\_\allowbreak{}kp}$^{\scriptscriptstyle M}$ \\[1pt]
+Zigzaguea siguiendo la línea & bajar \texttt{kp}$^{\scriptscriptstyle M}$, subir \texttt{kd}$^{\scriptscriptstyle M}$ \\[1pt]
+Se sale de la línea en las curvas & bajar \texttt{v\_\allowbreak{}line}$^{\scriptscriptstyle M}$; subir \texttt{kp}$^{\scriptscriptstyle M}$ \\[1pt]
+Pierde la línea en zonas de color o con otra luz & Calibrar linea otra vez; \texttt{dark\_\allowbreak{}th}$^{\scriptscriptstyle M}$ \\[1pt]
+Cuenta cruces de más (marcas verdes) & subir \texttt{cross\_\allowbreak{}th}$^{\scriptscriptstyle M}$ \\[1pt]
+No ve un cruce & bajar \texttt{cross\_\allowbreak{}th}$^{\scriptscriptstyle M}$; subir \texttt{cross\_\allowbreak{}win}$^{\scriptscriptstyle M}$ \\[1pt]
+La garra queda antes o después del cubo (nivel 1) & \texttt{nivel\_\allowbreak{}1\_\allowbreak{}cruce\_\allowbreak{}a\_\allowbreak{}pedestal\_\allowbreak{}cm} \\[1pt]
+El cubo no queda sobre el pedestal (nivel 2) & \texttt{nivel\_\allowbreak{}2\_\allowbreak{}t\_\allowbreak{}a\_\allowbreak{}pedestal\_\allowbreak{}cm} \\[1pt]
+La garra choca con el pedestal al bajar & \texttt{h\_\allowbreak{}pedestal}$^{\scriptscriptstyle M}$ \\[1pt]
+Suelta el cubo o no lo aprieta & \texttt{claw\_\allowbreak{}cube}$^{\scriptscriptstyle M}$ \\[1pt]
+Choca con la pared al girar (nivel 1) & \texttt{nivel\_\allowbreak{}1\_\allowbreak{}x\_\allowbreak{}de\_\allowbreak{}bajada}, \texttt{nivel\_\allowbreak{}1\_\allowbreak{}linea\_\allowbreak{}inferior\_\allowbreak{}y} \\[1pt]
+Roza los muros del pasillo (nivel 2) & \texttt{nivel\_\allowbreak{}2\_\allowbreak{}diagonal\_\allowbreak{}punto\_\allowbreak{}x}, \texttt{nivel\_\allowbreak{}2\_\allowbreak{}diagonal\_\allowbreak{}punto\_\allowbreak{}y}; si oscila, bajar \texttt{nivel\_\allowbreak{}2\_\allowbreak{}diagonal\_\allowbreak{}kp} \\[1pt]
+Una oruga se sale de la rampa blanca & \texttt{nivel\_\allowbreak{}2\_\allowbreak{}rampa\_\allowbreak{}centro\_\allowbreak{}x} \\[1pt]
+Se queda sin fuerza o resbala en rampa/escalera & subir \texttt{v\_\allowbreak{}ramp}$^{\scriptscriptstyle M}$ / \texttt{v\_\allowbreak{}stairs}$^{\scriptscriptstyle M}$ \\[1pt]
+Se levanta de la nariz o se voltea al subir & bajar \texttt{tip\_\allowbreak{}slew}$^{\scriptscriptstyle M}$; \texttt{h\_\allowbreak{}climb}$^{\scriptscriptstyle M}$ \\[1pt]
+Lee mal los colores & \texttt{color\_\allowbreak{}mode} = 1 y \texttt{COLOR\_\allowbreak{}REF} \\[1pt]
+Sigue con un valor viejo aunque cambié el archivo & lo guardado en el menú manda: Menú > Restaurar valores y B \\[1pt]
+\end{tabular}
+\hd{4. Antes de competir}
+\footnotesize\begin{itemize}[leftmargin=1em,itemsep=1pt,topsep=2pt]
+\item Tras cambiar un archivo: \texttt{python3 -m pytest} y probar en el simulador (\texttt{python3 simulation/run\_auto.py -{}-level N}).
+\item Probar cada tramo (nivel 1 a 4) en la pista: elegir el nivel con el joystick, B empieza, A para.
+\item Anotar en \texttt{config.py} / \texttt{pista.py} lo que se ajustó en el menú: si se borra lo guardado en el robot, vuelven los valores del archivo.
+\end{itemize}
+\end{multicols}
+\end{document}

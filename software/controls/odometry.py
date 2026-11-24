@@ -1,16 +1,16 @@
-# Rover X 2026: odometría de posición (x, y, rumbo) con encoders + giroscopio, robusta al patinaje.
-#
-# Marco del mapa (el de las vistas del reglamento): x hacia el este desde la orilla izquierda,
-# y hacia el SUR desde la orilla de arriba, en cm; rumbo 0 = este, 90 = sur (horario positivo,
-# igual que hal.heading()).
-#
-# Patinaje (recortes de cartón en la zona de obstáculos): la oruga que pisa uno gira sin avanzar
-# y su encoder sigue contando. El giroscopio dice cuánto giró DE VERDAD el robot y los encoders
-# cuánto "debió" girar; la diferencia dice qué oruga patinó, y el avance se mide con la otra:
-#   (adelante) giró más a la izquierda de lo esperado -> patinó la izquierda -> se mide con la derecha
-#   (adelante) giró más a la derecha de lo esperado   -> patinó la derecha   -> se mide con la izquierda
-#   en reversa los signos se invierten (la que patina avanza menos en su sentido)
-# B = distancia entre orugas * P["skid"] (las orugas derrapan al girar; CALIBRAR).
+## @file odometry.py
+#  @brief Odometría de posición (x, y, rumbo) con encoders + giroscopio, robusta al patinaje.
+#  @details Marco del mapa (el de las vistas del reglamento): x hacia el este desde la orilla
+#  izquierda, y hacia el SUR desde la orilla de arriba, en cm; rumbo 0 = este, 90 = sur (horario
+#  positivo, igual que hal.heading()).
+#  Patinaje (recortes de cartón en la zona de obstáculos): la oruga que pisa uno gira sin avanzar
+#  y su encoder sigue contando. El giroscopio dice cuánto giró DE VERDAD el robot y los encoders
+#  cuánto "debió" girar; la diferencia dice qué oruga patinó, y el avance se mide con la otra:
+#    - (adelante) giró más a la izquierda de lo esperado -> patinó la izquierda -> se mide con la derecha
+#    - (adelante) giró más a la derecha de lo esperado -> patinó la derecha -> se mide con la izquierda
+#    - en reversa los signos se invierten (la que patina avanza menos en su sentido)
+#  B = distancia entre orugas * P["skid"] (las orugas derrapan al girar; CALIBRAR).
+#  update() se registra en hal._on_wait: se integra en cada ciclo de control.
 
 import math
 import hal
@@ -25,8 +25,11 @@ _last = None             # (izquierda cm, derecha cm, hal.heading()) de la últi
 slip_cm = 0.0            # avance que los encoders contaron de más por patinaje (diagnóstico)
 
 
+## @brief Fija la posición conocida del robot (paso "pose" de las misiones).
+#  @param x cm hacia el este.
+#  @param y cm hacia el sur.
+#  @param heading Rumbo de mapa en grados (0 este, 90 sur).
 def set_pose(x, y, heading):
-    """El robot está en (x, y) cm mirando a `heading` grados de mapa."""
     global _x, _y, _off, _last, slip_cm
     _x = x
     _y = y
@@ -36,16 +39,23 @@ def set_pose(x, y, heading):
     slip_cm = 0.0
 
 
+## @brief Rumbo de mapa actual.
+#  @return Grados (0 este, 90 sur, 180 oeste, -90 norte).
 def heading():
     return hal.heading() + _off
 
 
+## @brief Posición estimada.
+#  @return (x, y, rumbo) en cm y grados de mapa.
 def pose():
     return _x, _y, heading()
 
 
+## @brief Integra el movimiento desde la última llamada.
+#  @details Elige con qué oruga medir el avance según el patinaje: en un pivote, la oruga quieta
+#  (no puede patinar); en un giro en el lugar o sin patinaje, el promedio; si no, la que no
+#  patinó (ver la explicación del archivo). Acumula en slip_cm lo que contaron de más.
 def update():
-    """Integra el movimiento desde la última llamada (llamarla en cada ciclo de control)."""
     global _x, _y, _last, slip_cm
     l, r = hal.tracks_cm()
     h = hal.heading()
@@ -84,6 +94,9 @@ def update():
 hal._on_wait.append(update)
 
 
+## @brief Lleva un ángulo a -180..180.
+#  @param d Grados.
+#  @return Grados equivalentes en -180..180.
 def wrap(d):
     while d > 180:
         d -= 360
@@ -92,10 +105,17 @@ def wrap(d):
     return d
 
 
+## @brief Va a un punto del mapa.
+#  @details Gira hacia él y avanza corrigiendo el rumbo hacia el punto con la posición estimada
+#  (si un recorte lo desvía, el controlador lo regresa). Termina al llegar o al rebasarlo; frena
+#  en los últimos 6 cm.
+#  @param x cm hacia el este.
+#  @param y cm hacia el sur.
+#  @param speed % de potencia (por defecto v_slow).
+#  @param tol cm de tolerancia para dar por llegado.
+#  @param timeout s máximos (por defecto 2 + distancia / 5).
+#  @return True si llegó.
 def goto(x, y, speed=None, tol=1.0, timeout=None):
-    """Va al punto (x, y) del mapa: gira hacia él y avanza corrigiendo el rumbo hacia el punto
-    con la posición estimada (si un recorte lo desvía, el controlador lo regresa). Termina al
-    llegar o al rebasarlo. Devuelve True si llegó."""
     if speed is None:
         speed = cfg.P["v_slow"]
     update()
@@ -134,13 +154,20 @@ def goto(x, y, speed=None, tol=1.0, timeout=None):
     return False
 
 
+## @brief Sigue una recta del mapa corrigiendo rumbo y desvío lateral.
+#  @details Si el patinaje lo empuja de lado, regresa a la recta (ángulo máximo de corrección
+#  max_deg). Termina cuando stop() es verdadero, al recorrer max_cm o al acabarse el tiempo.
+#  @param x0 x de un punto de la recta (cm).
+#  @param y0 y de un punto de la recta (cm).
+#  @param hdg Rumbo de la recta (grados de mapa) = hacia donde mira el robot.
+#  @param speed % de potencia; negativo = hacia atrás por la misma recta.
+#  @param timeout s máximos.
+#  @param max_cm cm máximos a recorrer sobre la recta.
+#  @param stop Función sin argumentos que dice cuándo terminar (p. ej. "ve la línea").
+#  @param max_deg Ángulo máximo contra la recta al corregir (por defecto track_max).
+#  @param halt False = al cumplirse stop() no frena (encadenar otro tramo sin parar en una rampa).
+#  @return True si terminó por stop().
 def track(x0, y0, hdg, speed=None, timeout=5.0, max_cm=None, stop=None, max_deg=None, halt=True):
-    """Sigue la recta del mapa que pasa por (x0, y0) con rumbo `hdg`, corrigiendo el rumbo Y el
-    desvío lateral (si el patinaje lo empuja de lado, regresa a la recta). Termina cuando stop()
-    es verdadero, al recorrer max_cm o al acabarse el tiempo. Devuelve True si fue por stop().
-    max_deg: ángulo máximo contra la recta al corregir el desvío (por omisión track_max).
-    halt=False: al cumplirse stop() no frena (para encadenar otro tramo sin parar en una rampa).
-    speed < 0: hacia atrás por la misma recta (rumbo hdg = hacia donde mira el robot)."""
     if speed is None:
         speed = cfg.P["v_slow"]
     update()

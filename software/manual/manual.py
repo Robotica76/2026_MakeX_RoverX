@@ -1,26 +1,26 @@
-# Rover X 2026: control manual con el Bluetooth Controller de Makeblock (misiones de alianza).
+## @file manual.py
+#  @brief Control manual con el Bluetooth Controller de Makeblock (misiones de alianza).
+#  @details Misiones manuales (reglamento): cubos M-A-K-E-X en la barra del nivel 2 (en orden y de
+#  frente), activar las rampas (el primer acceso es por la ESCALERA) y 4 cilindros (5 x 15 cm)
+#  parados en el área negra.
 #
-# Misiones manuales (reglamento): cubos M-A-K-E-X en la barra del nivel 2 (en orden y de
-# frente), activar las rampas (el primer acceso es por la ESCALERA) y 4 cilindros (5 x 15 cm)
-# parados en el área negra.
+#  Mapeo (ver docs/control_manual.md):
+#    Joystick izq. ↕ (Ly)  avanzar / retroceder      Joystick der. ↔ (Rx)  girar
+#    Cruceta               movimientos finos lentos (si los joysticks están en el centro)
+#    L1 / L2               brazo arriba / abajo (mantener)
+#    R1 / R2               garra abrir / cerrar (mantener; entre claw_open y claw_cube - 20°)
+#    N1                    modo rápido / preciso (LEDs azul / naranja)
+#    N2                    brazo a la altura de la barra (cubos MakeX)
+#    N3 (mantener)         escalera: recto con el giroscopio, potencia de escalera
+#    N4                    brazo arriba (garra sobre la nariz): viajar, girar cerca de cosas
+#    Joystick der. ↕ (Ry)  brazo fino (además de L1/L2)
 #
-# Mapeo (ver docs/control_manual.md):
-#   Joystick izq. ↕ (Ly)  avanzar / retroceder      Joystick der. ↔ (Rx)  girar
-#   Cruceta               movimientos finos lentos (si los joysticks están en el centro)
-#   L1 / L2               brazo arriba / abajo (mantener)
-#   R1 / R2               garra abrir / cerrar (mantener; entre claw_open y claw_cube - 20°)
-#   N1                    modo rápido / preciso (LEDs azul / naranja)
-#   N2                    brazo a la altura de la barra (cubos MakeX)
-#   N3 (mantener)         escalera: recto con el giroscopio, potencia de escalera
-#   N4                    brazo arriba (garra sobre la nariz): viajar, girar cerca de cosas
-#   Joystick der. ↕ (Ry)  brazo fino (además de L1/L2)
-#
-# Ayudas:
-#   - Al avanzar sin girar, el giroscopio SOSTIENE EL RUMBO (rampas, recortes, la oruga
-#     izquierda que avanza 2.3 % menos). Al soltar el giro se toma el rumbo nuevo.
-#   - hal.drive limita la aceleración mientras va inclinado (no se vuelca en rampas/escalera).
-#   - El brazo se mueve por ÁNGULO DEL SERVO (0..90°, tabla medida en config.py): a 0° la garra
-#     queda baja y al frente (~8.5 cm), a 90° arriba sobre la nariz.
+#  Ayudas:
+#    - Al avanzar sin girar, el giroscopio SOSTIENE EL RUMBO (rampas, recortes, la oruga
+#      izquierda que avanza 2.3 % menos). Al soltar el giro se toma el rumbo nuevo.
+#    - hal.drive limita la aceleración mientras va inclinado (no se vuelca en rampas/escalera).
+#    - El brazo se mueve por ÁNGULO DEL SERVO (0..90°, tabla medida en config.py): a 0° la garra
+#      queda baja y al frente (~8.5 cm), a 90° arriba sobre la nariz.
 
 import hal
 import config as cfg
@@ -35,8 +35,10 @@ CLAW_RATE = 150.0                           # grados de servo por segundo con R1
 DT = 0.02
 
 
+## @brief Zona muerta + curva expo del joystick: más precisión cerca del centro.
+#  @param v Valor del eje (-100..100).
+#  @return Valor con zona muerta (PAD_DEADZONE) y curva (PAD_EXPO), -100..100.
 def shape(v):
-    """Zona muerta + curva expo: más precisión cerca del centro del joystick."""
     if abs(v) < cfg.PAD_DEADZONE:
         return 0
     x = hal.clamp(v / 100.0, -1, 1)
@@ -44,24 +46,36 @@ def shape(v):
     return y * 100
 
 
+## @brief Mezcla arcade -> tanque, escalando para no saturar.
+#  @param forward Avance (-100..100).
+#  @param turn Giro (-100..100; + = derecha).
+#  @param limit Potencia máxima (PAD_FAST o PAD_SLOW).
+#  @return (izquierda, derecha) en % de potencia.
 def mix(forward, turn, limit):
-    """Arcade -> tanque, escalando para no saturar."""
     left = forward + turn
     right = forward - turn
     m = max(abs(left), abs(right), 100)
     return left * limit / m, right * limit / m
 
 
+## @brief Detecta el momento en que se presiona una tecla del gamepad.
+#  @param state Dict donde se guarda el estado anterior de cada tecla.
+#  @param key Nombre de la tecla.
+#  @return True solo en el ciclo en que se presiona.
 def _edge(state, key):
-    """True solo en el momento en que se presiona la tecla."""
     now = hal.pad_key(key)
     was = state.get(key, False)
     state[key] = now
     return now and not was
 
 
+## @brief Corrección de giro para ir recto con el giroscopio mientras no se pide girar.
+#  @details Al empezar a avanzar sin girar guarda el rumbo; al pedir un giro lo suelta y al
+#  terminar de girar toma el rumbo nuevo.
+#  @param f Avance pedido.
+#  @param t Giro pedido.
+#  @return Giro a aplicar (el pedido, o la corrección para sostener el rumbo, ±25).
 def _heading_hold(f, t):
-    """Corrección de giro para ir recto con el giroscopio mientras no se pide girar."""
     global hold
     if t != 0 or f == 0:
         hold = None
@@ -76,23 +90,34 @@ def _heading_hold(f, t):
 CLAW_SQUEEZE = 20.0                         # grados que se puede cerrar más allá de claw_cube
 
 
+## @brief Sentido de apertura del servo de la garra.
+#  @return +1 si abrir es subir el ángulo (claw_open >= claw_cube), -1 si no.
 def _claw_dir():
-    """+1 si abrir es subir el ángulo del servo (según la calibración claw_open / claw_cube)."""
     return 1 if cfg.P["claw_open"] >= cfg.P["claw_cube"] else -1
 
 
+## @brief Limita el ángulo de la garra a su recorrido útil.
+#  @details De claw_open (abierta) a claw_cube + CLAW_SQUEEZE (apretando): abrir o cerrar de más
+#  fuerza el servo contra el tope.
+#  @param deg Ángulo pedido.
+#  @return Ángulo limitado.
 def _claw_limit(deg):
-    """La garra va de claw_open (abierta) a claw_cube + CLAW_SQUEEZE (apretando): abrir de más
-    o cerrar de más fuerza el servo contra el tope."""
     shut = cfg.P["claw_cube"] - _claw_dir() * CLAW_SQUEEZE
     return hal.clamp(deg, min(cfg.P["claw_open"], shut), max(cfg.P["claw_open"], shut))
 
 
+## @brief Fija el ángulo del servo del brazo (0..90°).
+#  @param deg Ángulo pedido.
 def _arm(deg):
     global arm_deg
     arm_deg = hal.clamp(deg, 0, 90)
 
 
+## @brief Un ciclo del control manual (cada DT segundos).
+#  @details Lee el gamepad: N1 modo rápido/preciso; L1/L2 y Ry brazo; N2 brazo a la barra; N4
+#  brazo arriba; R1/R2 garra; N3 (mantener) escalera recto con el giroscopio; Ly/Rx manejo con
+#  sostén de rumbo; cruceta movimientos finos. Mapeo completo en docs/control_manual.md.
+#  @param state Dict de estado de las teclas (para _edge).
 def step(state):
     global claw, fast, hold
     if _edge(state, "N1"):
@@ -150,13 +175,17 @@ def step(state):
     hal.drive(left, right)
 
 
+## @brief Texto de estado para la pantalla.
+#  @return Modo (RAPIDO/PRECISO), ángulo del brazo y altura de la garra.
 def status():
     h, _ = geo.arm_at(arm_deg)
     return "%s brazo %d (%.0f cm)" % ("RAPIDO" if fast else "PRECISO", arm_deg, h)
 
 
+## @brief Bucle de control manual.
+#  @param duration_s Segundos máximos (None = sin límite).
+#  @details Sale al pasar duration_s o con A (parar) en el CyberPi; al salir detiene el robot.
 def loop(duration_s=None):
-    """Bucle de control manual. Sale al pasar duration_s o con A (abortar) en el CyberPi."""
     global hold
     hold = None
     hal.clear_abort()

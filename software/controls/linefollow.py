@@ -1,10 +1,12 @@
-# Rover X 2026: seguidor de línea PID con detección de cruces robusta para línea delgada.
-#
-# Cruces "con memoria": con una línea de 10-30 mm y el robot oscilando, las dos sondas
-# exteriores casi nunca ven negro AL MISMO TIEMPO. Por eso un cruce se arma con lo que vean
-# L2 y R2 dentro de una ventana de avance (P["cross_win"] cm, medida con encoders):
-#   "X" = las dos exteriores vieron negro, "L" = solo la izquierda, "R" = solo la derecha.
-# Los giros se escriben en la ruta (missions.py); las marcas verdes son opcionales (P["green"]).
+## @file linefollow.py
+#  @brief Seguidor de línea PID con detección de cruces robusta para línea delgada.
+#  @details Cruces "con memoria": con una línea de 10-30 mm y el robot oscilando, las dos sondas
+#  exteriores casi nunca ven negro AL MISMO TIEMPO. Por eso un cruce se arma con lo que vean L2 y
+#  R2 dentro de una ventana de avance (P["cross_win"] cm, medida con encoders):
+#  "X" = las dos exteriores vieron negro, "L" = solo la izquierda, "R" = solo la derecha.
+#  Los giros se escriben en la ruta (missions.py); las marcas verdes son opcionales (P["green"]).
+#  Las funciones at_junction, at_color, color_then_cm, after_cm, leave_color, obstacle_within,
+#  line_end y pitch_above crean CONDICIONES DE PARADA cond(bits, junction) para follow_until().
 
 import hal
 import config as cfg
@@ -28,6 +30,7 @@ _after_turn = False      # tras girar en un cruce, el siguiente seguimiento empi
 bias_cm = 0.0            # ir corrido de la línea: + = la línea queda a la DERECHA del robot (cm)
 
 
+## @brief Reinicia el PID, la vuelta pendiente de las marcas verdes y el rastreador de cruces.
 def reset():
     global _last_err, _integral, _pending_turn
     _last_err = 0
@@ -36,6 +39,7 @@ def reset():
     reset_junctions()
 
 
+## @brief Reinicia el rastreador de cruces (queda armado).
 def reset_junctions():
     global _win_start, _seen_l, _seen_r, _clear_since, _armed
     _win_start = None
@@ -45,11 +49,20 @@ def reset_junctions():
     _armed = True
 
 
+## @brief Corrección PID (función pura, probada en PC).
+#  @param err Error actual (offset de la línea, -100..100).
+#  @param last_err Error del ciclo anterior.
+#  @param integral Suma de errores.
+#  @return Corrección en % de potencia (kp·err + ki·integral + kd·(err - last_err)).
 def correction(err, last_err, integral):
-    """Corrección PID (función pura para poder probarla en PC)."""
     return cfg.P["kp"] * err + cfg.P["ki"] * integral + cfg.P["kd"] * (err - last_err)
 
 
+## @brief Aplica la corrección PID a las orugas.
+#  @details Línea a la izquierda (err < 0) -> frena la oruga izquierda. Con bias_cm el robot va
+#  corrido de la línea esos cm.
+#  @param err Offset de la línea (-100..100).
+#  @param speed % de potencia base.
 def drive_with(err, speed):
     global _last_err, _integral
     if bias_cm:
@@ -62,19 +75,29 @@ def drive_with(err, speed):
     hal.drive(speed + c, speed - c)
 
 
+## @brief Un ciclo de control del seguidor.
+#  @param speed % de potencia base.
+#  @return Bits leídos (dict sonda -> ve línea).
 def step(speed):
-    """Un ciclo de control. Devuelve los bits leídos."""
     err, bits = hal.line_read()
     drive_with(err, speed)
     return bits
 
 
+## @brief ¿Alguna sonda ve línea?
+#  @param bits Dict de hal.line_read().
+#  @return True si alguna de las cuatro ve negro.
 def sees_line(bits):
     return bits["L2"] or bits["L1"] or bits["R1"] or bits["R2"]
 
 
+## @brief Actualiza el rastreador de cruces con una lectura.
+#  @details Tras cerrar un cruce queda desarmado hasta recorrer 1.5 cm con las exteriores en
+#  blanco (no cuenta dos veces el mismo cruce). Guarda el cruce en last_junction.
+#  @param bits Dict de hal.line_read().
+#  @param odo Odometría absoluta (cm).
+#  @return "X", "L" o "R" en el ciclo en que se cierra un cruce; si no, None.
 def track_junction(bits, odo):
-    """Actualiza el rastreador con una lectura. Devuelve "X", "L", "R" al cerrar un cruce, o None."""
     global _win_start, _seen_l, _seen_r, _clear_since, _armed, last_junction
     left = bits.get("L2x", bits["L2"])
     right = bits.get("R2x", bits["R2"])
@@ -107,6 +130,8 @@ def track_junction(bits, odo):
     return None
 
 
+## @brief Lee las marcas verdes con las sondas exteriores y deja pendiente la vuelta.
+#  @details Verde a los dos lados = media vuelta (2); a la izquierda = -1; a la derecha = 1.
 def _check_green():
     global _pending_turn
     left = colors.read("L2") == "green"
@@ -119,8 +144,13 @@ def _check_green():
         _pending_turn = 1
 
 
+## @brief Gira EN el último cruce (paso "jturn") y se alinea con la línea nueva.
+#  @details Avanza hasta que el CENTRO DE GIRO quede sobre el cruce, gira el 85 % con el
+#  giroscopio y termina buscando la línea (spin_to_line). El otro brazo del cruce sigue bajo las
+#  sondas: el siguiente seguimiento empieza desarmado.
+#  @param deg Grados; positivo = derecha, 0 = solo centrarse.
+#  @return True si encontró la línea.
 def turn_at_junction(deg):
-    """Avanza hasta que el CENTRO DE GIRO quede sobre el último cruce, gira y se alinea."""
     done = 0
     if last_junction is not None:
         done = hal.odo_abs() - last_junction[1]
@@ -138,11 +168,15 @@ def turn_at_junction(deg):
     return ok
 
 
+## @brief Sigue la línea hasta que se cumpla una condición.
+#  @param cond Función cond(bits, junction); junction es "X"/"L"/"R" en el ciclo en que se cierra
+#  un cruce, si no None.
+#  @param speed % de potencia (por defecto v_line).
+#  @param timeout s máximos.
+#  @param green True = girar con las marcas verdes (si P["green"] == 1).
+#  @return True si se cumplió cond; False si se acabó el tiempo, se pidió parar o la línea se
+#  perdió más de P["lost_s"] segundos.
 def follow_until(cond, speed=None, timeout=10.0, green=False):
-    """Sigue la línea hasta que cond(bits, junction) sea verdadero.
-
-    junction es "X"/"L"/"R" en el ciclo en que se cierra un cruce, si no None.
-    Si la línea se pierde más de P["lost_s"] segundos, devuelve False."""
     global _pending_turn, _after_turn, _armed
     if speed is None:
         speed = cfg.P["v_line"]
@@ -181,8 +215,11 @@ def follow_until(cond, speed=None, timeout=10.0, green=False):
 
 
 # ---------------------------------------------------------------- condiciones de parada
+## @brief Condición: contar cruces.
+#  @param count Cruces a contar.
+#  @param kind "any", "X", "L" o "R" ("L" y "R" también cuentan las "X").
+#  @return Función cond(bits, junction) para follow_until().
 def at_junction(count=1, kind="any"):
-    """Cuenta cruces; kind = "any", "X", "L" o "R" ("L" también cuenta las "X")."""
     state = {"n": 0}
 
     def cond(bits, j):
@@ -192,6 +229,10 @@ def at_junction(count=1, kind="any"):
     return cond
 
 
+## @brief Condición: alguna de las sondas indicadas ve un color.
+#  @param name Nombre del color.
+#  @param probes Sondas a revisar (por defecto las centrales).
+#  @return Función cond(bits, junction) para follow_until().
 def at_color(name, probes=("L1", "R1")):
     def cond(bits, j):
         for pr in probes:
@@ -201,10 +242,14 @@ def at_color(name, probes=("L1", "R1")):
     return cond
 
 
+## @brief Condición: cm recorridos después de que alguna sonda vio un color.
+#  @details Sirve para terminar arriba de una rampa SIN detenerse sobre la pendiente (parado ahí
+#  el robot se resbalaba hacia atrás al arrancar; simulador con una rampa de 40°).
+#  @param name Nombre del color.
+#  @param cm cm a recorrer después de verlo.
+#  @param probes Sondas a revisar (por defecto las cuatro).
+#  @return Función cond(bits, junction) para follow_until().
 def color_then_cm(name, cm, probes=None):
-    """Verdadero `cm` después de que alguna sonda vio ese color. Sirve para terminar arriba de una
-    rampa SIN detenerse sobre la pendiente (parado ahí, el robot se resbalaba hacia atrás al
-    arrancar; lo mostró el simulador con una rampa de 40°)."""
     if probes is None:
         probes = cfg.PROBES
     state = {"from": None}
@@ -220,6 +265,9 @@ def color_then_cm(name, cm, probes=None):
     return cond
 
 
+## @brief Condición: recorrer una distancia.
+#  @param cm cm desde que se crea la condición.
+#  @return Función cond(bits, junction) para follow_until().
 def after_cm(cm):
     start = hal.odo_abs()
 
@@ -228,10 +276,15 @@ def after_cm(cm):
     return cond
 
 
+## @brief Condición: salir de una zona de color.
+#  @details Verdadera cuando las sondas, después de haber visto la zona, la dejan de ver
+#  (COLOR_CONFIRM lecturas seguidas). Guarda la odometría en last_edge: es la referencia para
+#  medir desde el borde de la zona.
+#  @param name Nombre del color.
+#  @param probes Sondas a revisar (por defecto las cuatro: la línea cruza la zona y las
+#  centrales leen negro).
+#  @return Función cond(bits, junction) para follow_until().
 def leave_color(name, probes=None):
-    """Verdadero cuando las sondas, después de haber visto la zona de ese color, la dejan de ver
-    (3 lecturas seguidas).
-    Guarda la odometría en last_edge: es la referencia para medir desde el borde de la zona."""
     if probes is None:
         probes = cfg.PROBES     # la línea cruza la zona: las centrales leen negro
     state = {"n": 0, "seen": False}
@@ -254,17 +307,22 @@ def leave_color(name, probes=None):
     return cond
 
 
+## @brief Condición: obstáculo a menos de cm (solo con ultrasónico, cfg.HAS_US).
+#  @param cm Distancia en cm.
+#  @return Función cond(bits, junction) para follow_until().
 def obstacle_within(cm):
-    """Solo con ultrasónico (HAS_US = True)."""
     def cond(bits, j):
         d = hal.distance_cm()
         return 0 < d <= cm
     return cond
 
 
+## @brief Condición: fin de la línea.
+#  @details Ninguna sonda ve línea durante cm de avance (en una curva cerrada la línea se pierde
+#  un instante y no es el final; simulador).
+#  @param cm cm sin línea.
+#  @return Función cond(bits, junction) para follow_until().
 def line_end(cm=2.0):
-    """Verdadero cuando ninguna sonda ve línea durante `cm` de avance (en una curva cerrada la
-    línea se pierde un instante y no es el final; lo mostró el simulador)."""
     state = {"since": None}
 
     def cond(bits, j):
@@ -278,6 +336,9 @@ def line_end(cm=2.0):
     return cond
 
 
+## @brief Condición: empieza una rampa (pitch mayor o igual a deg).
+#  @param deg Grados de inclinación.
+#  @return Función cond(bits, junction) para follow_until().
 def pitch_above(deg):
     def cond(bits, j):
         return hal.pitch() >= deg
